@@ -75,9 +75,16 @@ public sealed class FFTools
     /// Проверяет, есть ли у ffmpeg декодер для указанного кодека, то есть
     /// «установлен ли в системе» тот кодек, которым сжат файл.
     /// </summary>
-    public async Task<bool> HasDecoderAsync(string codecName, CancellationToken ct = default)
+    public Task<bool> HasDecoderAsync(string codecName, CancellationToken ct = default) =>
+        HasComponentAsync("-decoders", codecName, ct);
+
+    /// <summary>Проверяет, есть ли у ffmpeg кодировщик с указанным именем (например, libfdk_aac).</summary>
+    public Task<bool> HasEncoderAsync(string encoderName, CancellationToken ct = default) =>
+        HasComponentAsync("-encoders", encoderName, ct);
+
+    private async Task<bool> HasComponentAsync(string listFlag, string name, CancellationToken ct)
     {
-        if (FfmpegPath is null || string.IsNullOrWhiteSpace(codecName))
+        if (FfmpegPath is null || string.IsNullOrWhiteSpace(name))
             return false;
 
         try
@@ -91,24 +98,24 @@ public sealed class FFTools
             psi.ArgumentList.Add("-hide_banner");
             psi.ArgumentList.Add("-loglevel");
             psi.ArgumentList.Add("error");
-            psi.ArgumentList.Add("-decoders");
+            psi.ArgumentList.Add(listFlag);
 
             using var proc = Process.Start(psi)!;
             var output = await proc.StandardOutput.ReadToEndAsync(ct);
             await proc.WaitForExitAsync(ct);
 
-            // Строки декодеров выглядят так: " V..... h264   H.264 / AVC ..."
+            // Строки выглядят так: " V..... h264   H.264 / AVC ..." — имя во 2-й колонке.
             foreach (var line in output.Split('\n'))
             {
                 var parts = line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length >= 2 && parts[0].Length >= 1 &&
-                    string.Equals(parts[1], codecName, StringComparison.OrdinalIgnoreCase))
+                    string.Equals(parts[1], name, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Не удалось получить список декодеров ffmpeg");
+            _logger.LogWarning(ex, "Не удалось получить список компонентов ffmpeg ({flag})", listFlag);
         }
 
         return false;

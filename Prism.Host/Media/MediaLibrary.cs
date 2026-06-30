@@ -42,6 +42,7 @@ public sealed class MediaLibrary
     private readonly FFTools _tools;
     private readonly ILogger<MediaLibrary> _logger;
     private readonly ConcurrentDictionary<string, MediaItem> _byId = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _resolveLocks = new();
 
     public string MediaDirectory { get; }
 
@@ -89,33 +90,50 @@ public sealed class MediaLibrary
     public MediaItem? Get(string id) => _byId.TryGetValue(id, out var item) ? item : null;
 
     /// <summary>
-    /// Лениво анализирует файл и определяет режим воспроизведения. После первого
-    /// успешного определения результат кэшируется.
+    /// Лениво анализирует файл и определяет режим воспроизведения. Операция общая и
+    /// одноразовая: результат кэшируется, повторные вызовы возвращают его сразу.
     /// </summary>
     public async Task<MediaItem> ResolveAsync(MediaItem item, CancellationToken ct = default)
     {
         if (item.Info is not null)
             return item;
 
-        if (!File.Exists(item.Path))
+        // Сериализуем определение режима по каждому файлу, чтобы параллельные
+        // запросы не запускали несколько ffprobe и не перетирали результат друг друга.
+        var sem = _resolveLocks.GetOrAdd(item.Id, _ => new SemaphoreSlim(1, 1));
+        await sem.WaitAsync(ct);
+        try
         {
-            item.Mode = PlaybackMode.Unsupported;
-            item.StatusMessage = "Файл больше не существует на диске.";
+            if (item.Info is not null)
+                return item; // другой запрос успел определить режим, пока мы ждали
+            await ResolveCoreAsync(item);
             return item;
         }
+        finally
+        {
+            sem.Release();
+        }
+    }
 
-        var info = await _probe.ProbeAsync(item.Path, ct);
+    private async Task ResolveCoreAsync(MediaItem item)
+    {
+        if (!File.Exists(item.Path))
+        {
+            // Не кэшируем: файл может появиться позже.
+            item.Mode = PlaybackMode.Unsupported;
+            item.StatusMessage = "Файл больше не существует на диске.";
+            return;
+        }
+
+        // ВАЖНО: анализ файла не привязан к токену конкретного HTTP-запроса.
+        // Прерванный запрос (например, при перемотке клиент отменяет загрузку
+        // сегментов) не должен отменять ffprobe и «отравлять» кэш режимом Unsupported.
+        var info = await _probe.ProbeAsync(item.Path, CancellationToken.None);
 
         if (info is null)
         {
-            // ffprobe недоступен: остаётся только прямое воспроизведение, пусть
-            // браузер сам пробует. Работает для обычных mp4/webm; mkv, скорее всего,
-            // не воспроизведётся.
-            item.Info = new MediaInfo
-            {
-                DurationSeconds = 0, Container = Path.GetExtension(item.Path).TrimStart('.'),
-                VideoCodec = null, AudioCodec = null,
-            };
+            // ffprobe недоступен/не смог прочитать файл: для mp4/webm пробуем прямое
+            // воспроизведение, для остального — помечаем как недоступное.
             var ext = Path.GetExtension(item.Path).ToLowerInvariant();
             if (ext is ".mp4" or ".webm" or ".m4v" or ".mov")
             {
@@ -128,35 +146,36 @@ public sealed class MediaLibrary
                     ? "Не удалось прочитать метаданные медиа (ошибка ffprobe)."
                     : "ffmpeg/ffprobe не установлены, этот контейнер обработать нельзя.";
             }
-            return item;
+            // Публикуем Info последним — после того как Mode уже выставлен.
+            item.Info = new MediaInfo
+            {
+                DurationSeconds = 0, Container = ext.TrimStart('.'),
+                VideoCodec = null, AudioCodec = null,
+            };
+            return;
         }
-
-        item.Info = info;
 
         if (info.IsBrowserNative)
         {
             item.Mode = PlaybackMode.Direct;
-            return item;
         }
-
-        // Нужна обработка -> требуется ffmpeg И декодер для исходного кодека.
-        if (!_tools.Available)
+        else if (!_tools.Available)
         {
+            // Нужна обработка -> требуется ffmpeg И декодер для исходного кодека.
             item.Mode = PlaybackMode.Unsupported;
             item.StatusMessage = "ffmpeg не установлен; перекодировать этот файл для браузера нельзя.";
-            return item;
         }
-
-        var codec = info.VideoCodec ?? "";
-        if (!await _tools.HasDecoderAsync(codec, ct))
+        else if (!await _tools.HasDecoderAsync(info.VideoCodec ?? "", CancellationToken.None))
         {
             item.Mode = PlaybackMode.Unsupported;
-            item.StatusMessage = $"Видеокодек '{codec}' не установлен/не декодируется ffmpeg в этой системе.";
-            return item;
+            item.StatusMessage = $"Видеокодек '{info.VideoCodec}' не установлен/не декодируется ffmpeg в этой системе.";
+        }
+        else
+        {
+            item.Mode = PlaybackMode.Transcode;
         }
 
-        item.Mode = PlaybackMode.Transcode;
-        return item;
+        item.Info = info; // публикуем последним
     }
 
     private static string MakeId(string path)

@@ -18,69 +18,58 @@ if (!Path.IsPathRooted(options.MediaDirectory))
     options.MediaDirectory = Path.Combine(builder.Environment.ContentRootPath, options.MediaDirectory);
 
 builder.Services.AddSingleton(options);
-
 builder.Services.AddSingleton<FFTools>();
 builder.Services.AddSingleton<MediaProbe>();
 builder.Services.AddSingleton<MediaLibrary>();
 builder.Services.AddSingleton<HlsTranscoder>();
 
+// Клиент (Prism.Client) живёт на другом origin (dev-сервер Vite), поэтому
+// разрешаем кросс-доменные запросы к API. Для домашнего плеера это безопасно.
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+    p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+
 var app = builder.Build();
+app.UseCors();
 
 var library = app.Services.GetRequiredService<MediaLibrary>();
 var transcoder = app.Services.GetRequiredService<HlsTranscoder>();
 var tools = app.Services.GetRequiredService<FFTools>();
 
-// ---- Страница библиотеки -------------------------------------------------
-app.MapGet("/", () =>
+// ---- Информация о сервере ------------------------------------------------
+// Единственная настройка клиента — URL сервера; всё остальное он берёт отсюда.
+app.MapGet("/api/info", () => Results.Json(new
 {
-    var items = library.Scan();
-    return Results.Content(Pages.Library(items, library.MediaDirectory, tools.Available), "text/html");
-});
+    name = "Prism",
+    ffmpegAvailable = tools.Available,
+    outputCodec = options.OutputCodec,
+    segmentSeconds = options.SegmentSeconds,
+    audioBitrateKbps = options.AudioBitrateKbps,
+    audioSampleRate = options.AudioSampleRate,
+    mediaDirectory = library.MediaDirectory,
+    mediaCount = library.Scan().Count,
+}));
 
-app.MapGet("/api/media", async () =>
+// ---- Список медиа-библиотеки ---------------------------------------------
+app.MapGet("/api/media", async (CancellationToken ct) =>
 {
     var items = library.Scan();
     var list = new List<object>();
     foreach (var it in items)
     {
-        await library.ResolveAsync(it);
-        list.Add(new
-        {
-            it.Id,
-            it.DisplayName,
-            it.FileName,
-            mode = it.Mode.ToString(),
-            durationSeconds = it.Info?.DurationSeconds ?? 0,
-            videoCodec = it.Info?.VideoCodec,
-            audioCodec = it.Info?.AudioCodec,
-            streamUrl = it.Mode switch
-            {
-                PlaybackMode.Transcode => $"/hls/{it.Id}/playlist.m3u8",
-                PlaybackMode.Direct => $"/raw/{it.Id}",
-                _ => null,
-            },
-        });
+        await library.ResolveAsync(it, ct);
+        list.Add(MediaDto(it));
     }
     return Results.Json(list);
 });
 
-// ---- Страница плеера ------------------------------------------------------
-app.MapGet("/watch/{id}", async (string id, CancellationToken ct) =>
+// ---- Одна запись медиа-библиотеки ----------------------------------------
+app.MapGet("/api/media/{id}", async (string id, CancellationToken ct) =>
 {
     library.Scan();
     var item = library.Get(id);
-    if (item is null) return Results.NotFound("Неизвестный идентификатор медиа.");
-
+    if (item is null) return Results.NotFound();
     await library.ResolveAsync(item, ct);
-
-    return item.Mode switch
-    {
-        PlaybackMode.Transcode =>
-            Results.Content(Pages.Watch(item, $"/hls/{id}/playlist.m3u8", isHls: true), "text/html"),
-        PlaybackMode.Direct =>
-            Results.Content(Pages.Watch(item, $"/raw/{id}", isHls: false), "text/html"),
-        _ => Results.Content(Pages.Unsupported(item), "text/html"),
-    };
+    return Results.Json(MediaDto(item));
 });
 
 // ---- HLS-плейлист --------------------------------------------------------
@@ -155,6 +144,35 @@ app.Run();
 return;
 
 // --------------------------------------------------------------------------
+// DTO записи медиа-библиотеки для клиента. streamUrl — относительный путь,
+// клиент дополняет его базовым URL сервера.
+static object MediaDto(MediaItem it) => new
+{
+    id = it.Id,
+    title = it.DisplayName,
+    fileName = it.FileName,
+    streamType = it.Mode switch
+    {
+        PlaybackMode.Transcode => "hls",
+        PlaybackMode.Direct => "direct",
+        _ => "unsupported",
+    },
+    playable = it.Mode != PlaybackMode.Unsupported,
+    streamUrl = it.Mode switch
+    {
+        PlaybackMode.Transcode => $"/hls/{it.Id}/playlist.m3u8",
+        PlaybackMode.Direct => $"/raw/{it.Id}",
+        _ => null,
+    },
+    durationSeconds = it.Info?.DurationSeconds ?? 0,
+    width = it.Info?.Width ?? 0,
+    height = it.Info?.Height ?? 0,
+    videoCodec = it.Info?.VideoCodec,
+    audioCodec = it.Info?.AudioCodec,
+    audioChannels = it.Info?.AudioChannels ?? 0,
+    statusMessage = it.StatusMessage,
+};
+
 static void ApplyCommandLine(string[] args, PlayerOptions options)
 {
     for (var i = 0; i < args.Length; i++)

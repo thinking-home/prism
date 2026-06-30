@@ -73,7 +73,7 @@ public sealed class MediaProbe
         }
 
         string? videoCodec = null, audioCodec = null;
-        int width = 0, height = 0;
+        int width = 0, height = 0, audioChannels = 0;
 
         if (root.TryGetProperty("streams", out var streams))
         {
@@ -96,6 +96,7 @@ public sealed class MediaProbe
                 else if (type == "audio" && audioCodec is null)
                 {
                     audioCodec = codec;
+                    if (s.TryGetProperty("channels", out var ch)) audioChannels = ch.GetInt32();
                 }
             }
         }
@@ -108,6 +109,7 @@ public sealed class MediaProbe
             AudioCodec = audioCodec,
             Width = width,
             Height = height,
+            AudioChannels = audioChannels,
         };
     }
 }

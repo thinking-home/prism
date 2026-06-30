@@ -25,9 +25,23 @@ public sealed class PlayerOptions
     /// <summary>Длина одного HLS-сегмента в секундах.</summary>
     public int SegmentSeconds { get; set; } = 6;
 
+    /// <summary>
+    /// Длина одной сессии транскодирования в минутах. Один процесс ffmpeg выдаёт
+    /// непрерывный (бесшовный по звуку) диапазон такой длины и завершается; разрыв
+    /// звука возможен только на границе сессий. Больше — реже разрывы, но больше
+    /// расход CPU/диска на сессию.
+    /// </summary>
+    public int SessionMinutes { get; set; } = 15;
+
     /// <summary>Пресет скорости/качества кодирования x264/x265.</summary>
     public string EncoderPreset { get; set; } = "veryfast";
 
     /// <summary>Constant Rate Factor (качество, меньше = лучше/больше).</summary>
     public int Crf { get; set; } = 23;
+
+    /// <summary>Битрейт аудио AAC в кбит/с.</summary>
+    public int AudioBitrateKbps { get; set; } = 256;
+
+    /// <summary>Частота дискретизации аудио на выходе, Гц.</summary>
+    public int AudioSampleRate { get; set; } = 48000;
 }

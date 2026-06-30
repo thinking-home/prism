@@ -9,6 +9,7 @@ public sealed record MediaInfo
     public required string? AudioCodec { get; init; }
     public int Width { get; init; }
     public int Height { get; init; }
+    public int AudioChannels { get; init; }
     public bool HasAudio => AudioCodec is not null;
 
     /// <summary>

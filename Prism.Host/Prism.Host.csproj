@@ -4,7 +4,8 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <AssemblyName>NetworkPlayer.Host</AssemblyName>
+        <AssemblyName>Prism.Host</AssemblyName>
+        <RootNamespace>Prism.Host</RootNamespace>
         <InvariantGlobalization>true</InvariantGlobalization>
     </PropertyGroup>
 
