@@ -226,7 +226,9 @@ public sealed class HlsTranscoder : IAsyncDisposable
         // поэтому идёт до -i (и до -ss — сам seek остаётся мгновенным).
         if (_options.BufferBurstSeconds > 0)
         {
-            a.Add("-readrate"); a.Add("1.0");
+            // Пейсинг на кратность максимальной скорости плеера — чтобы 2x не буксовал.
+            var rate = Math.Max(1.0, _options.MaxPlaybackRate);
+            a.Add("-readrate"); a.Add(rate.ToString("0.0##", CultureInfo.InvariantCulture));
             a.Add("-readrate_initial_burst");
             a.Add(_options.BufferBurstSeconds.ToString(CultureInfo.InvariantCulture));
         }
