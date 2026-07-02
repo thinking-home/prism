@@ -10,6 +10,10 @@
 - **Prism.Client** — клиент (Node.js + TypeScript + React + Vite). Минималистичный
   веб-интерфейс: библиотека и плеер. У клиента **одна-единственная настройка — URL
   сервера**; всё остальное он получает от сервера запросом (`/api/info`).
+- **Плагины** (`Prism.Abstractions` + `Prism.Plugins.*`) — опциональные модули,
+  подключаемые списком в `appsettings`. Ядро корректно работает и без них. Метаданные
+  библиотеки (названия фильмов, привязка эпизодов к сериалу) реализованы плагином
+  `Prism.Plugins.Library` — см. [раздел про плагины](#плагины-и-метаданные).
 
 ## Как это устроено
 
@@ -18,6 +22,7 @@ Prism.Client (Vite/React)  ──HTTP/CORS──>  Prism.Host (ASP.NET Core / Ke
                                             ├── GET /api/info                     данные о сервере (кодек, ffmpeg, …)
                                             ├── GET /api/media                    список библиотеки
                                             ├── GET /api/media/{id}               одна запись (+ дорожки аудио/субтитров)
+                                            ├── PUT/DELETE /api/media/{id}/metadata   метаданные (плагин Prism.Plugins.Library)
                                             ├── GET /api/media/{id}/subtitle/N.vtt субтитры в WebVTT (текстовые дорожки)
                                             ├── GET /raw/{id}                     прямой стрим с Range (браузерные файлы)
                                             ├── GET /hls/{id}/playlist.m3u8?audio=N  HLS-плейлист (VOD) для аудиодорожки N
@@ -96,6 +101,60 @@ CPU при перемотках в разы и опускает нагрузку
   и независимо от аудио. Поддерживаются **текстовые** субтитры (SRT/ASS/…); графические
   (PGS/VOBSUB/DVB) помечены `textBased:false` и в списке недоступны.
 
+## Плагины и метаданные
+
+Сервер расширяется **плагинами** — опциональными модулями. Ядро (стриминг, скан
+библиотеки) работает и без единого плагина.
+
+- Контракт — `Prism.Abstractions`: `IPrismModule` (регистрирует сервисы и эндпоинты)
+  и `IMediaMetaSource` (подмешивает произвольные пары ключ-значение к записям
+  `/api/media`).
+- Список активных плагинов — в `appsettings` (`"Plugins": ["Prism.Plugins.Library"]`).
+  Каждый грузится из `Prism.Host/plugins/<имя>/<имя>.dll` в собственный
+  `AssemblyLoadContext` (зависимости плагина резолвятся из его папки; контракт — из
+  хоста). Build плагина копирует его в `plugins/` автоматически.
+
+### Плагин `Prism.Plugins.Library` (метаданные)
+
+Хранит метаданные библиотеки — **источник истины на сервере**. Минимальный набор:
+для фильма — название; для эпизода — сериал, номер сезона и эпизода. Отображаемое
+название подмешивается в `/api/media` (поле `title`), без плагина там остаётся имя
+файла.
+
+- **СУБД задаётся конфигом** (секция `Database`), код про конкретную СУБД не знает:
+
+  ```json
+  "Database": {
+    "Provider": "sqlite",                       // "sqlite" | "postgres"
+    "ConnectionString": "Data Source=data/prism.db"
+  }
+  ```
+
+  Для Postgres — своя строка подключения (можно ту же БД, что и у умного дома).
+- **Схему ведёт мигратор** [ThinkingHome.Migrator](https://github.com/thinking-home/migrator)
+  (ключ версионирования `prism.library` — своя история миграций в общей БД). Таблица
+  плоская `Prism_MediaMetadata` (префикс `Prism_`, без схемы) — одинаково на SQLite и
+  Postgres.
+- **Заполнение** метаданных — вне ответственности сервера: он лишь отдаёт/принимает их
+  через API. Пример:
+
+  ```bash
+  # фильм
+  curl -X PUT http://localhost:8080/api/media/<id>/metadata \
+    -H 'Content-Type: application/json' -d '{"kind":"movie","title":"Патриот"}'
+
+  # эпизод  →  title в /api/media станет «Патриот · S01E02»
+  curl -X PUT http://localhost:8080/api/media/<id>/metadata \
+    -H 'Content-Type: application/json' \
+    -d '{"kind":"episode","seriesTitle":"Патриот","season":1,"episode":2}'
+
+  # снять метаданные (вернётся имя файла)
+  curl -X DELETE http://localhost:8080/api/media/<id>/metadata
+  ```
+
+> Собирается всё решением: `dotnet build Prism.sln` (build плагина сам разворачивает
+> его в `plugins/`). Данные и развёрнутые плагины (`data/`, `plugins/`) — в `.gitignore`.
+
 ## Требования
 
 - .NET 10 SDK (сервер)
@@ -163,6 +222,9 @@ sudo snap install ffmpeg
 ### 1. Сервер — Prism.Host
 
 ```bash
+# один раз собрать решение — заодно развернутся включённые плагины в plugins/
+dotnet build Prism.sln
+
 # положите видео в Prism.Host/videos/  (или укажите папку через --media)
 dotnet run --project Prism.Host
 # API слушает http://localhost:8080

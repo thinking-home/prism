@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Prism.Plugins.Library</RootNamespace>
+        <!-- Плагин загружается динамически: тянет свои зависимости и deps.json. -->
+        <EnableDynamicLoading>true</EnableDynamicLoading>
+    </PropertyGroup>
+
+    <!-- Контракты — из хоста (Private=false), чтобы типы совпадали между ALC. -->
+    <ItemGroup>
+        <ProjectReference Include="..\Prism.Abstractions\Prism.Abstractions.csproj">
+            <Private>false</Private>
+            <ExcludeAssets>runtime</ExcludeAssets>
+        </ProjectReference>
+    </ItemGroup>
+
+    <!-- Эндпоинты/Results — типы ASP.NET из общего фреймворка (не копируем). -->
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+        <PackageReference Include="ThinkingHome.Migrator" Version="3.10.0" />
+        <PackageReference Include="ThinkingHome.Migrator.Framework" Version="3.10.0" />
+        <PackageReference Include="ThinkingHome.Migrator.Providers.SQLite" Version="3.10.0" />
+        <PackageReference Include="ThinkingHome.Migrator.Providers.PostgreSQL" Version="3.10.0" />
+    </ItemGroup>
+
+    <!-- Деплой плагина в папку хоста, откуда его грузит PluginLoader. -->
+    <Target Name="DeployToHost" AfterTargets="Build">
+        <ItemGroup>
+            <PluginOut Include="$(TargetDir)**\*" Exclude="$(TargetDir)Prism.Abstractions.dll" />
+        </ItemGroup>
+        <Copy SourceFiles="@(PluginOut)"
+              DestinationFolder="$(MSBuildProjectDirectory)\..\Prism.Host\plugins\Prism.Plugins.Library\%(RecursiveDir)"
+              SkipUnchangedFiles="true" />
+    </Target>
+
+</Project>

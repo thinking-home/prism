@@ -1,5 +1,7 @@
+using Prism.Abstractions;
 using Prism.Host;
 using Prism.Host.Media;
+using Prism.Host.Plugins;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +26,15 @@ builder.Services.AddSingleton<MediaLibrary>();
 builder.Services.AddSingleton<HlsTranscoder>();
 builder.Services.AddSingleton<SubtitleService>();
 
+// Плагины: список сборок из appsettings ("Plugins"). Без плагинов ядро работает
+// как обычно. Каждый модуль регистрирует свои сервисы и (ниже) эндпоинты.
+// Отдаём плагинам корень приложения (для разрешения относительных путей, напр. SQLite).
+builder.Configuration["ContentRoot"] = builder.Environment.ContentRootPath;
+var modules = PluginLoader.Load(builder.Configuration, builder.Environment.ContentRootPath,
+    LoggerFactory.Create(b => b.AddConsole()).CreateLogger("Plugins"));
+foreach (var module in modules)
+    module.ConfigureServices(builder.Services, builder.Configuration);
+
 // Клиент (Prism.Client) живёт на другом origin (dev-сервер Vite), поэтому
 // разрешаем кросс-доменные запросы к API. Для домашнего плеера это безопасно.
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -31,6 +42,12 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 
 var app = builder.Build();
 app.UseCors();
+
+// Эндпоинты плагинов.
+foreach (var module in modules)
+    module.MapEndpoints(app);
+
+var metaSources = app.Services.GetServices<IMediaMetaSource>().ToArray();
 
 var library = app.Services.GetRequiredService<MediaLibrary>();
 var transcoder = app.Services.GetRequiredService<HlsTranscoder>();
@@ -55,12 +72,16 @@ app.MapGet("/api/info", () => Results.Json(new
 app.MapGet("/api/media", async (CancellationToken ct) =>
 {
     var items = library.Scan();
-    var list = new List<object>();
+    var byId = new Dictionary<string, Dictionary<string, object?>>();
+    var list = new List<Dictionary<string, object?>>();
     foreach (var it in items)
     {
         await library.ResolveAsync(it, ct);
-        list.Add(MediaDto(it));
+        var dto = MediaDto(it);
+        list.Add(dto);
+        byId[it.Id] = dto;
     }
+    await ApplyMetaAsync(metaSources, byId, ct);
     return Results.Json(list);
 });
 
@@ -71,7 +92,9 @@ app.MapGet("/api/media/{id}", async (string id, CancellationToken ct) =>
     var item = library.Get(id);
     if (item is null) return Results.NotFound();
     await library.ResolveAsync(item, ct);
-    return Results.Json(MediaDto(item));
+    var dto = MediaDto(item);
+    await ApplyMetaAsync(metaSources, new() { [id] = dto }, ct);
+    return Results.Json(dto);
 });
 
 // ---- HLS-плейлист (для выбранной аудиодорожки ?audio=N) ------------------
@@ -170,40 +193,60 @@ return;
 // --------------------------------------------------------------------------
 // DTO записи медиа-библиотеки для клиента. streamUrl — относительный путь,
 // клиент дополняет его базовым URL сервера.
-static object MediaDto(MediaItem it) => new
+// Базовые поля записи (ядро). Плагины через IMediaMetaSource могут добавить/
+// переопределить произвольные ключи (напр. "title" из метаданных библиотеки).
+static Dictionary<string, object?> MediaDto(MediaItem it) => new()
 {
-    id = it.Id,
-    title = it.DisplayName,
-    fileName = it.FileName,
-    streamType = it.Mode switch
+    ["id"] = it.Id,
+    ["title"] = it.DisplayName,
+    ["fileName"] = it.FileName,
+    ["streamType"] = it.Mode switch
     {
         PlaybackMode.Transcode => "hls",
         PlaybackMode.Direct => "direct",
         _ => "unsupported",
     },
-    playable = it.Mode != PlaybackMode.Unsupported,
-    streamUrl = it.Mode switch
+    ["playable"] = it.Mode != PlaybackMode.Unsupported,
+    ["streamUrl"] = it.Mode switch
     {
         PlaybackMode.Transcode => $"/hls/{it.Id}/playlist.m3u8",
         PlaybackMode.Direct => $"/raw/{it.Id}",
         _ => null,
     },
-    durationSeconds = it.Info?.DurationSeconds ?? 0,
-    width = it.Info?.Width ?? 0,
-    height = it.Info?.Height ?? 0,
-    videoCodec = it.Info?.VideoCodec,
-    audioCodec = it.Info?.AudioCodec,
-    audioChannels = it.Info?.AudioChannels ?? 0,
-    audioTracks = (it.Info?.AudioTracks ?? []).Select(x => new
+    ["durationSeconds"] = it.Info?.DurationSeconds ?? 0,
+    ["width"] = it.Info?.Width ?? 0,
+    ["height"] = it.Info?.Height ?? 0,
+    ["videoCodec"] = it.Info?.VideoCodec,
+    ["audioCodec"] = it.Info?.AudioCodec,
+    ["audioChannels"] = it.Info?.AudioChannels ?? 0,
+    ["audioTracks"] = (it.Info?.AudioTracks ?? []).Select(x => new
     {
         index = x.Index, codec = x.Codec, language = x.Language, title = x.Title, channels = x.Channels,
     }),
-    subtitleTracks = (it.Info?.SubtitleTracks ?? []).Select(x => new
+    ["subtitleTracks"] = (it.Info?.SubtitleTracks ?? []).Select(x => new
     {
         index = x.Index, codec = x.Codec, language = x.Language, title = x.Title, textBased = x.TextBased,
     }),
-    statusMessage = it.StatusMessage,
+    ["statusMessage"] = it.StatusMessage,
 };
+
+// Подмешивает в записи доп. поля от зарегистрированных источников метаданных.
+// Без источников — no-op (поведение ядра не меняется).
+static async Task ApplyMetaAsync(IReadOnlyList<IMediaMetaSource> sources,
+    Dictionary<string, Dictionary<string, object?>> byId, CancellationToken ct)
+{
+    if (sources.Count == 0 || byId.Count == 0) return;
+    var ids = byId.Keys.ToArray();
+    foreach (var src in sources)
+    {
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> meta;
+        try { meta = await src.GetMetaAsync(ids, ct); }
+        catch { continue; } // плагин не должен ломать выдачу библиотеки
+        foreach (var (id, fields) in meta)
+            if (byId.TryGetValue(id, out var dto))
+                foreach (var (k, v) in fields) dto[k] = v;
+    }
+}
 
 // Приводит индекс аудиодорожки из запроса к допустимому диапазону файла.
 static int ClampAudio(MediaInfo info, int? audio)
