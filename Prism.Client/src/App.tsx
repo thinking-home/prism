@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Link, Route, Routes } from "react-router-dom";
 import { api } from "./api";
 import type { ServerInfo } from "./api";
 import { useServerUrl } from "./serverUrl";
 import { Library } from "./components/Library";
 import { Watch } from "./components/Watch";
+import { DebugPanel } from "./components/DebugPanel";
 
 export function App() {
   const { serverUrl } = useServerUrl();
@@ -32,6 +33,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Library />} />
           <Route path="/watch/:id" element={<Watch />} />
+          <Route path="/debug" element={<DebugPanel />} />
         </Routes>
       </main>
     </>
@@ -59,6 +61,7 @@ function Header({ info, error }: { info: ServerInfo | null; error: string | null
         <h1>Prism</h1>
         <div className="spacer" />
         {status}
+        <Link to="/debug" className="gear" title="Дебаг сессий">debug</Link>
         <button className="gear" onClick={() => setOpen((v) => !v)} title="Настройки сервера">
           ⚙
         </button>

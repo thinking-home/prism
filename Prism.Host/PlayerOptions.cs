@@ -33,6 +33,20 @@ public sealed class PlayerOptions
     /// </summary>
     public int SessionMinutes { get; set; } = 15;
 
+    /// <summary>
+    /// Начальный «бёрст» быстрого транскодирования (сек): ffmpeg сначала быстро
+    /// выдаёт этот запас (быстрая перемотка/старт), а дальше читает вход со скоростью
+    /// ~1x. Это не даёт процессу транскодировать все 15 минут вперёд на полной
+    /// скорости и резко снижает нагрузку на CPU. 0 — без пейсинга (макс. скорость).
+    /// </summary>
+    public int BufferBurstSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Через сколько секунд простоя (никто не запрашивает её сегменты) сессия
+    /// транскодирования убивается фоновым уборщиком, освобождая CPU.
+    /// </summary>
+    public int SessionIdleSeconds { get; set; } = 25;
+
     /// <summary>Пресет скорости/качества кодирования x264/x265.</summary>
     public string EncoderPreset { get; set; } = "veryfast";
 

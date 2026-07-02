@@ -188,3 +188,104 @@ code {
   background: #000;
   border-radius: 10px;
 }
+
+.tracks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+}
+.tracks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #8b90a0;
+}
+.tracks select {
+  background: #161821;
+  border: 1px solid #23252e;
+  color: #e7e9ee;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+/* --- дебаг-панель --- */
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 8px 0 16px;
+}
+.stat {
+  flex: 1;
+  min-width: 160px;
+  background: #161821;
+  border: 1px solid #23252e;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+}
+.stat-label {
+  color: #8b90a0;
+  font-size: 13px;
+  margin-top: 2px;
+}
+.stat-hint {
+  color: #6b7080;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.spark {
+  background: #161821;
+  border: 1px solid #23252e;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.spark-label {
+  color: #8b90a0;
+  font-size: 12px;
+}
+.card.dbg {
+  display: block;
+}
+.dbg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.meter {
+  margin: 8px 0;
+}
+.meter-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #8b90a0;
+  margin-bottom: 4px;
+}
+.meter-track {
+  height: 8px;
+  background: #23252e;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.dbg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: #8b90a0;
+  font-size: 12px;
+  margin-top: 8px;
+}

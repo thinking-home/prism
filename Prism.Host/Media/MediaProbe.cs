@@ -72,8 +72,10 @@ public sealed class MediaProbe
                 duration = parsed;
         }
 
-        string? videoCodec = null, audioCodec = null;
-        int width = 0, height = 0, audioChannels = 0;
+        string? videoCodec = null;
+        int width = 0, height = 0;
+        var audioTracks = new List<AudioTrack>();
+        var subtitleTracks = new List<SubtitleTrack>();
 
         if (root.TryGetProperty("streams", out var streams))
         {
@@ -93,23 +95,50 @@ public sealed class MediaProbe
                         double.TryParse(sd.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pd))
                         duration = pd;
                 }
-                else if (type == "audio" && audioCodec is null)
+                else if (type == "audio")
                 {
-                    audioCodec = codec;
-                    if (s.TryGetProperty("channels", out var ch)) audioChannels = ch.GetInt32();
+                    var channels = s.TryGetProperty("channels", out var ch) ? ch.GetInt32() : 0;
+                    audioTracks.Add(new AudioTrack(audioTracks.Count, codec,
+                        Tag(s, "language"), Tag(s, "title"), channels));
+                }
+                else if (type == "subtitle")
+                {
+                    subtitleTracks.Add(new SubtitleTrack(subtitleTracks.Count, codec,
+                        Tag(s, "language"), Tag(s, "title"), IsTextSubtitle(codec)));
                 }
             }
         }
+
+        var first = audioTracks.FirstOrDefault();
 
         return new MediaInfo
         {
             DurationSeconds = duration,
             Container = container,
             VideoCodec = videoCodec,
-            AudioCodec = audioCodec,
+            AudioCodec = first?.Codec,
             Width = width,
             Height = height,
-            AudioChannels = audioChannels,
+            AudioChannels = first?.Channels ?? 0,
+            AudioTracks = audioTracks,
+            SubtitleTracks = subtitleTracks,
         };
     }
+
+    private static string? Tag(JsonElement stream, string name)
+    {
+        if (stream.TryGetProperty("tags", out var tags) &&
+            tags.TryGetProperty(name, out var v))
+            return v.GetString();
+        return null;
+    }
+
+    // Текстовые субтитры можно извлечь в WebVTT; графические (PGS/VOBSUB/DVB) — нет.
+    private static readonly HashSet<string> TextSubtitleCodecs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text", "stl",
+        "subviewer", "subviewer1", "microdvd", "mpl2", "pjs", "realtext", "sami", "jacosub", "vplayer",
+    };
+
+    private static bool IsTextSubtitle(string? codec) => codec is not null && TextSubtitleCodecs.Contains(codec);
 }

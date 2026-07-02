@@ -22,6 +22,7 @@ builder.Services.AddSingleton<FFTools>();
 builder.Services.AddSingleton<MediaProbe>();
 builder.Services.AddSingleton<MediaLibrary>();
 builder.Services.AddSingleton<HlsTranscoder>();
+builder.Services.AddSingleton<SubtitleService>();
 
 // Клиент (Prism.Client) живёт на другом origin (dev-сервер Vite), поэтому
 // разрешаем кросс-доменные запросы к API. Для домашнего плеера это безопасно.
@@ -33,6 +34,7 @@ app.UseCors();
 
 var library = app.Services.GetRequiredService<MediaLibrary>();
 var transcoder = app.Services.GetRequiredService<HlsTranscoder>();
+var subtitles = app.Services.GetRequiredService<SubtitleService>();
 var tools = app.Services.GetRequiredService<FFTools>();
 
 // ---- Информация о сервере ------------------------------------------------
@@ -72,8 +74,8 @@ app.MapGet("/api/media/{id}", async (string id, CancellationToken ct) =>
     return Results.Json(MediaDto(item));
 });
 
-// ---- HLS-плейлист --------------------------------------------------------
-app.MapGet("/hls/{id}/playlist.m3u8", async (string id, CancellationToken ct) =>
+// ---- HLS-плейлист (для выбранной аудиодорожки ?audio=N) ------------------
+app.MapGet("/hls/{id}/playlist.m3u8", async (string id, int? audio, CancellationToken ct) =>
 {
     library.Scan();
     var item = library.Get(id);
@@ -82,12 +84,12 @@ app.MapGet("/hls/{id}/playlist.m3u8", async (string id, CancellationToken ct) =>
     if (item.Mode != PlaybackMode.Transcode || item.Info is null)
         return Results.BadRequest("Этот файл не раздаётся через HLS.");
 
-    var playlist = transcoder.BuildPlaylist(item.Info);
+    var playlist = transcoder.BuildPlaylist(item.Info, ClampAudio(item.Info, audio));
     return Results.Text(playlist, "application/vnd.apple.mpegurl");
 });
 
 // ---- HLS-сегмент (транскодирование на лету) ------------------------------
-app.MapGet("/hls/{id}/segment/{index:int}.ts", async (string id, int index, HttpContext http, CancellationToken ct) =>
+app.MapGet("/hls/{id}/segment/{index:int}.ts", async (string id, int index, int? audio, HttpContext http, CancellationToken ct) =>
 {
     var item = library.Get(id);
     if (item is null) { http.Response.StatusCode = 404; return; }
@@ -107,12 +109,34 @@ app.MapGet("/hls/{id}/segment/{index:int}.ts", async (string id, int index, Http
     http.Response.Headers.CacheControl = "no-store";
     try
     {
-        await transcoder.WriteSegmentAsync(item, index, http.Response.Body, ct);
+        await transcoder.WriteSegmentAsync(item, index, ClampAudio(item.Info, audio), http.Response.Body, ct);
     }
     catch (OperationCanceledException)
     {
         // Клиент ушёл со страницы / перемотал — делать больше нечего.
     }
+});
+
+// ---- Дебаг: активные сессии транскодирования и метрики процессов ---------
+app.MapGet("/api/debug/sessions", () => Results.Json(new
+{
+    serverCpuSeconds = System.Diagnostics.Process.GetCurrentProcess().TotalProcessorTime.TotalSeconds,
+    cpuCount = Environment.ProcessorCount,
+    sessions = transcoder.DebugSnapshot(),
+}));
+
+// ---- Субтитры в WebVTT (текстовые дорожки) -------------------------------
+app.MapGet("/api/media/{id}/subtitle/{index:int}.vtt", async (string id, int index, CancellationToken ct) =>
+{
+    library.Scan();
+    var item = library.Get(id);
+    if (item is null) return Results.NotFound();
+    await library.ResolveAsync(item, ct);
+
+    var path = await subtitles.GetVttPathAsync(item, index);
+    return path is null
+        ? Results.NotFound("Субтитры недоступны (не текстовые или ошибка извлечения).")
+        : Results.File(path, "text/vtt; charset=utf-8");
 });
 
 // ---- Прямой стриминг (HTTP Range) для браузерных файлов ------------------
@@ -170,8 +194,24 @@ static object MediaDto(MediaItem it) => new
     videoCodec = it.Info?.VideoCodec,
     audioCodec = it.Info?.AudioCodec,
     audioChannels = it.Info?.AudioChannels ?? 0,
+    audioTracks = (it.Info?.AudioTracks ?? []).Select(x => new
+    {
+        index = x.Index, codec = x.Codec, language = x.Language, title = x.Title, channels = x.Channels,
+    }),
+    subtitleTracks = (it.Info?.SubtitleTracks ?? []).Select(x => new
+    {
+        index = x.Index, codec = x.Codec, language = x.Language, title = x.Title, textBased = x.TextBased,
+    }),
     statusMessage = it.StatusMessage,
 };
+
+// Приводит индекс аудиодорожки из запроса к допустимому диапазону файла.
+static int ClampAudio(MediaInfo info, int? audio)
+{
+    var count = info.AudioTracks.Count;
+    if (count <= 0) return 0;
+    return Math.Clamp(audio ?? 0, 0, count - 1);
+}
 
 static void ApplyCommandLine(string[] args, PlayerOptions options)
 {
