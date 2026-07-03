@@ -36,4 +36,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     // Готовый экран проигрывателя (PlayerView) с элементами управления.
     implementation("androidx.media3:media3-ui:1.4.1")
+    // Медиа-сессия: MediaSession, MediaSessionService, MediaController.
+    implementation("androidx.media3:media3-session:1.4.1")
 }

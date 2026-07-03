@@ -1,47 +1,54 @@
 package org.prism.player
 
 import android.app.Activity
-import android.os.Bundle
+import android.content.ComponentName
 import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 
-// Единственный экран: проигрывает одно видео из Prism.
+// Экран больше не создаёт проигрыватель сам, а ПОДКЛЮЧАЕТСЯ к сервису
+// PlaybackService (где живут проигрыватель и медиа-сессия) и показывает его.
 class MainActivity : Activity() {
 
-    // Ссылка на проигрыватель, чтобы освободить его при закрытии экрана.
-    private var player: ExoPlayer? = null
+    // «Соединение» с сервисом. Готовится асинхронно (не сразу).
+    private var controllerFuture: ListenableFuture<MediaController>? = null
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    // onStart — экран становится видимым: подключаемся к сервису.
+    override fun onStart() {
+        super.onStart()
 
-        // 1. Создаём проигрыватель.
-        val exo = ExoPlayer.Builder(this).build()
-
-        // 2. Создаём экран проигрывателя и привязываем к нему проигрыватель.
+        // Экран проигрывателя.
         val view = PlayerView(this)
-        view.player = exo
         setContentView(view)
 
-        // 3. Говорим, что играть (HLS-поток Prism), готовим и запускаем.
-        exo.setMediaItem(MediaItem.fromUri(STREAM_URL))
-        exo.prepare()
-        exo.play()
+        // «Адрес» нашего сервиса с медиа-сессией.
+        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
 
-        player = exo
+        // Подключаемся к сервису; когда соединение готово — начинаем играть.
+        val future = MediaController.Builder(this, token).buildAsync()
+        future.addListener({
+            val controller = future.get()            // «пульт» к проигрывателю в сервисе
+            view.player = controller                  // показываем его на экране
+            controller.setMediaItem(MediaItem.fromUri(STREAM_URL))
+            controller.prepare()
+            controller.play()
+        }, MoreExecutors.directExecutor())
+        controllerFuture = future
     }
 
-    // Экран закрывается — освобождаем ресурсы проигрывателя.
-    override fun onDestroy() {
-        super.onDestroy()
-        player?.release()
-        player = null
+    // onStop — экран скрыт: отключаемся от сервиса (проигрывание в сервисе продолжается).
+    override fun onStop() {
+        super.onStop()
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
     }
 
     companion object {
-        // ВРЕМЕННО зашитый адрес потока для проверки.
-        //   10.0.2.2  — это адрес ХОСТА — компьютера из эмулятора (где запущен Prism).
-        //   <ID>      — заменить на id фильма из http://localhost:8080/api/media
+        //   10.0.2.2  — адрес компьютера из эмулятора (где запущен Prism).
+        //   после /hls/ — id фильма из http://localhost:8080/api/media
         private const val STREAM_URL =
             "http://10.0.2.2:8080/hls/f8060e10c52e23ad/playlist.m3u8"
     }

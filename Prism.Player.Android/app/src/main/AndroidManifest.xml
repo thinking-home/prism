@@ -4,6 +4,10 @@
 
     <!-- Разрешение выходить в сеть (иначе видео не загрузить). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Разрешения для фонового сервиса воспроизведения и его уведомления. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="Prism Player"
@@ -19,6 +23,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Фоновый сервис с медиа-сессией. intent-filter делает его доступным
+             для системных медиа-контроллеров; foregroundServiceType — тип «воспроизведение». -->
+        <service
+            android:name=".PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
     </application>
 
