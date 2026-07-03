@@ -38,4 +38,6 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     // Медиа-сессия: MediaSession, MediaSessionService, MediaController.
     implementation("androidx.media3:media3-session:1.4.1")
+    // MQTT-клиент (Paho) — приём команд управления.
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
 }
