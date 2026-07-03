@@ -27,3 +27,13 @@ android {
         jvmTarget = "17"
     }
 }
+
+// Подключаемые библиотеки.
+dependencies {
+    // ExoPlayer (Media3) — проигрыватель видео.
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    // Поддержка HLS (формат, которым Prism отдаёт видео).
+    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
+    // Готовый экран проигрывателя (PlayerView) с элементами управления.
+    implementation("androidx.media3:media3-ui:1.4.1")
+}

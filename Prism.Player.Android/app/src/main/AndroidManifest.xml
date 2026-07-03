@@ -2,7 +2,12 @@
 <!-- Манифест — «паспорт» приложения: что за приложение и из чего состоит. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <application android:label="Prism Player">
+    <!-- Разрешение выходить в сеть (иначе видео не загрузить). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="Prism Player"
+        android:usesCleartextTraffic="true"><!-- разрешить http:// (Prism без https) -->
 
         <!-- Единственный экран приложения. -->
         <activity
