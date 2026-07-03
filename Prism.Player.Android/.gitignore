@@ -1,0 +1,13 @@
+# Папки сборки (генерируются, коммитить не нужно)
+.gradle/
+build/
+app/build/
+
+# Локальные настройки машины (путь к SDK и т.п.)
+local.properties
+
+# Файлы Android Studio / IDE
+.idea/
+*.iml
+
+.DS_Store

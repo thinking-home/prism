@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Манифест — «паспорт» приложения: что за приложение и из чего состоит. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:label="Prism Player">
+
+        <!-- Единственный экран приложения. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <!-- Этот intent-filter делает экран точкой входа и кладёт иконку в меню приложений. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
