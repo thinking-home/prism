@@ -13,7 +13,13 @@ import org.json.JSONObject
 // Подключается к MQTT-брокеру, слушает команды и передаёт их наружу двумя
 // колбэками: onOpen(mediaId) и onClose(). Сам плеер здесь не трогаем — этим
 // занимается сервис (там команды выполняются в главном потоке).
+// Адрес брокера, id, топик и логин/пароль приходят из настроек (Settings).
 class MqttController(
+    private val brokerUrl: String,
+    private val clientId: String,
+    private val cmdTopic: String,
+    private val mqttUser: String,
+    private val mqttPassword: String,
     private val onOpen: (mediaId: String) -> Unit,
     private val onClose: () -> Unit,
 ) {
@@ -22,13 +28,20 @@ class MqttController(
     private var client: MqttClient? = null
 
     fun start() {
+        // Не настроено (нет брокера или топика) — не подключаемся, служба живёт дальше.
+        if (brokerUrl.isEmpty() || cmdTopic.isEmpty()) return
         // Сеть нельзя в главном потоке, поэтому подключаемся в отдельном потоке.
         Thread {
             try {
-                val c = MqttClient(BROKER_URL, CLIENT_ID, MemoryPersistence())
+                val c = MqttClient(brokerUrl, clientId, MemoryPersistence())
                 val options = MqttConnectOptions().apply {
                     isAutomaticReconnect = true   // сам переподключается при обрыве
                     isCleanSession = true
+                    // Логин/пароль — только если заданы (иначе анонимный вход).
+                    if (mqttUser.isNotEmpty()) {
+                        userName = mqttUser
+                        password = mqttPassword.toCharArray()
+                    }
                 }
                 c.setCallback(object : MqttCallback {
                     override fun connectionLost(cause: Throwable?) {}
@@ -38,7 +51,7 @@ class MqttController(
                     }
                 })
                 c.connect(options)
-                c.subscribe(CMD_TOPIC)
+                c.subscribe(cmdTopic)
                 client = c
             } catch (e: Exception) {
                 // Не удалось подключиться — не роняем приложение.
@@ -62,13 +75,5 @@ class MqttController(
             }
             "close" -> main.post { onClose() }
         }
-    }
-
-    companion object {
-        // ИЗМЕНИ под свой брокер. 10.0.2.2 = адрес компьютера из эмулятора.
-        private const val BROKER_URL = "tcp://10.0.2.2:1883"
-        private const val CLIENT_ID = "prism-player-emulator"
-        // Топик, куда координатор шлёт команды этому плееру.
-        private const val CMD_TOPIC = "prism/player/emulator/cmd"
     }
 }

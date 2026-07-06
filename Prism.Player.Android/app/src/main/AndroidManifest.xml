@@ -29,6 +29,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Экран настроек (адреса, id, имя). Открывается кнопкой с главного экрана. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+
         <!-- Фоновый сервис с медиа-сессией. intent-filter делает его доступным
              для системных медиа-контроллеров; foregroundServiceType — тип «воспроизведение». -->
         <service

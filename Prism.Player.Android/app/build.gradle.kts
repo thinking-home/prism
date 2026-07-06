@@ -18,6 +18,12 @@ android {
         versionName = "0.1"
     }
 
+    // Включаем генерацию класса BuildConfig — нужен флаг BuildConfig.DEBUG,
+    // чтобы подставлять настройки эмулятора только в отладочной сборке.
+    buildFeatures {
+        buildConfig = true
+    }
+
     // Компилируем Java/Kotlin под уровень языка 17 (JDK 21 это умеет).
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

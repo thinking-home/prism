@@ -31,8 +31,14 @@ class MqttService : Service() {
         future.addListener({ controller = future.get() }, MoreExecutors.directExecutor())
         controllerFuture = future
 
-        // MQTT: команды выполняем над плеером через controller (уже в главном потоке).
+        // MQTT: адрес брокера, id, топик и логин/пароль берём из настроек.
+        // Команды выполняем над плеером через controller (уже в главном потоке).
         mqtt = MqttController(
+            brokerUrl = Settings.brokerUrl(this),
+            clientId = Settings.clientId(this),
+            cmdTopic = Settings.cmdTopic(this),
+            mqttUser = Settings.mqttUser(this),
+            mqttPassword = Settings.mqttPassword(this),
             onOpen = { mediaId -> openFile(mediaId) },
             onClose = { closeFile() },
         )
@@ -54,7 +60,10 @@ class MqttService : Service() {
     // Открыть файл: скомандовать плееру играть поток и вывести экран на передний план.
     private fun openFile(mediaId: String) {
         val c = controller ?: return
-        c.setMediaItem(MediaItem.fromUri("$PRISM_BASE/hls/$mediaId/playlist.m3u8"))
+        // Адрес Prism не настроен — играть неоткуда, ничего не делаем (не падаем).
+        val base = Settings.prismUrl(this)
+        if (base.isEmpty()) return
+        c.setMediaItem(MediaItem.fromUri("$base/hls/$mediaId/playlist.m3u8"))
         c.prepare()
         c.play()
         startActivity(
@@ -92,7 +101,6 @@ class MqttService : Service() {
     }
 
     companion object {
-        private const val PRISM_BASE = "http://10.0.2.2:8080"
         private const val CHANNEL_ID = "prism_player_service"
         private const val NOTIFICATION_ID = 1
     }

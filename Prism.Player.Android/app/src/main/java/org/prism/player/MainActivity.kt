@@ -5,7 +5,9 @@ import android.content.ComponentName
 import android.content.Intent
 import android.view.Gravity
 import android.view.View
+import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -21,6 +23,7 @@ class MainActivity : Activity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var playerView: PlayerView? = null
+    private var menuView: View? = null
 
     // onStart — экран становится видимым.
     override fun onStart() {
@@ -30,22 +33,36 @@ class MainActivity : Activity() {
         // команды даже после закрытия приложения). Если уже запущена — ничего не будет.
         startForegroundService(Intent(this, MqttService::class.java))
 
-        // Контейнер: заглушка (текст по центру) и поверх — экран видео.
+        // Контейнер: по центру — «меню» (название + кнопка настроек), поверх — видео.
         val root = FrameLayout(this)
-        val placeholder = TextView(this).apply {
-            text = "Prism Player"
-            textSize = 32f
+        val menu = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER,
             )
         }
+        menu.addView(TextView(this).apply {
+            text = "Prism Player"
+            textSize = 32f
+        })
+        val settings = Button(this).apply {
+            text = "Настройки"
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+            }
+        }
+        menu.addView(settings)
+
         val view = PlayerView(this)
-        root.addView(placeholder)
+        root.addView(menu)
         root.addView(view)
         setContentView(root)
         playerView = view
+        menuView = menu
+        settings.requestFocus() // сразу фокус на кнопку — для пульта/D-pad на ТВ
 
         // Подключаемся к сервису с медиа-сессией.
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
@@ -67,6 +84,7 @@ class MainActivity : Activity() {
     private fun updateUi(controller: MediaController) {
         val fileOpen = controller.currentMediaItem != null
         playerView?.visibility = if (fileOpen) View.VISIBLE else View.GONE
+        menuView?.visibility = if (fileOpen) View.GONE else View.VISIBLE
     }
 
     // onStop — экран скрыт: отключаемся от сервиса (сервис и проигрывание живут дальше).
