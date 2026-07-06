@@ -7,7 +7,12 @@
     <!-- Разрешения для фонового сервиса воспроизведения и его уведомления. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Запуск службы после перезагрузки устройства. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- «Поверх других приложений» — чтобы вывести видео на экран из фона по команде. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:label="Prism Player"
@@ -34,6 +39,21 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- Всегда-живая служба MQTT (со своим постоянным уведомлением). -->
+        <service
+            android:name=".MqttService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Приёмник события «система загрузилась» — стартует службу после перезагрузки. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

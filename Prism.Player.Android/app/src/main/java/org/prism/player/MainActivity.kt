@@ -2,6 +2,7 @@ package org.prism.player
 
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Intent
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -24,6 +25,10 @@ class MainActivity : Activity() {
     // onStart — экран становится видимым.
     override fun onStart() {
         super.onStart()
+
+        // Гарантируем, что служба MQTT запущена как «переднего плана» (чтобы слушала
+        // команды даже после закрытия приложения). Если уже запущена — ничего не будет.
+        startForegroundService(Intent(this, MqttService::class.java))
 
         // Контейнер: заглушка (текст по центру) и поверх — экран видео.
         val root = FrameLayout(this)
