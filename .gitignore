@@ -1,8 +1,9 @@
 .idea
+.vs
 .DS_Store
 bin
 obj
 
 # Генерируемое во время выполнения / деплоя плагинов
-Prism.Host/plugins/
-Prism.Host/data/
+Prism.Host.Console/plugins/
+Prism.Host.Console/data/

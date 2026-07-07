@@ -1,0 +1,23 @@
+<!-- WiX v6 (не v7): v7 требует принятия платной OSMF-лицензии. -->
+<Project Sdk="WixToolset.Sdk/6.0.2">
+
+    <!-- MSI-инсталлятор службы Windows «Prism Host». Собирается стандартным
+         `dotnet build` (WiX SDK приезжает из NuGet, ставить ничего не нужно).
+         Publish="true" — WiX сам публикует проекты и даёт на результат
+         bindpath !(bindpath.<имя проекта>), см. Package.wxs. В решении проект
+         собирается только в конфигурации Release. -->
+    <PropertyGroup>
+        <InstallerPlatform>x64</InstallerPlatform>
+        <OutputName>PrismHostSetup</OutputName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Prism.Host.Service\Prism.Host.Service.csproj" Publish="true" />
+        <ProjectReference Include="..\Prism.Plugins.Library\Prism.Plugins.Library.csproj" Publish="true" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="WixToolset.Firewall.wixext" Version="6.0.2" />
+    </ItemGroup>
+
+</Project>

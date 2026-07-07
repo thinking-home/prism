@@ -1,0 +1,67 @@
+<!-- Инсталлятор Prism Host: ставит службу (Prism.Host.Service) в Program Files,
+     регистрирует её в Windows (автостарт, LocalSystem) и открывает входящие
+     подключения в брандмауэре для локальной сети. Всё декларативно, кастомных
+     действий нет. Файлы берутся из publish-выхода проектов — bindpath'ы
+     !(bindpath.*) создаёт ProjectReference Publish="true" в .wixproj. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+    <!-- Language/Codepage 1049/1251 — русские строки в базе MSI. -->
+    <Package Name="Prism Host"
+             Manufacturer="Prism"
+             Version="0.1.0"
+             UpgradeCode="8360D512-7A9E-4DA9-8645-BD7E5D061883"
+             Scope="perMachine"
+             Language="1049"
+             Codepage="1251">
+
+        <MajorUpgrade DowngradeErrorMessage="Уже установлена более новая версия Prism Host." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <StandardDirectory Id="ProgramFiles64Folder">
+            <Directory Id="INSTALLFOLDER" Name="Prism Host">
+
+                <!-- Служба публикуется одним exe (self-contained, PublishSingleFile),
+                     поэтому служба и её бинарь — один явный компонент. -->
+                <Component Id="HostService">
+                    <File Id="PrismHostExe" Source="!(bindpath.Prism.Host.Service)\Prism.Host.Service.exe" KeyPath="yes">
+                        <!-- Плееры (Android TV) ходят на Kestrel из локальной сети. -->
+                        <fw:FirewallException Id="PrismHostLan"
+                                              Name="Prism Host"
+                                              Description="Prism Host — стриминг видео по HTTP (HLS)."
+                                              Scope="localSubnet"
+                                              Profile="all" />
+                    </File>
+                    <ServiceInstall Id="PrismHostService"
+                                    Name="PrismHost"
+                                    DisplayName="Prism Host"
+                                    Description="Медиа-сервер Prism: раздаёт видео из локальной папки по HTTP (HLS)."
+                                    Type="ownProcess"
+                                    Start="auto"
+                                    Account="LocalSystem"
+                                    ErrorControl="normal" />
+                    <ServiceControl Id="PrismHostControl"
+                                    Name="PrismHost"
+                                    Start="install"
+                                    Stop="both"
+                                    Remove="uninstall"
+                                    Wait="yes" />
+                </Component>
+
+                <Component Id="AppSettings">
+                    <File Source="!(bindpath.Prism.Host.Service)\appsettings.json" />
+                </Component>
+
+                <!-- Плагины — как в дев-раскладке: plugins/<имя>/… ; содержимое
+                     папки публикации плагина собирается по маске при сборке MSI. -->
+                <Directory Id="PluginsDir" Name="plugins">
+                    <Directory Id="LibraryPluginDir" Name="Prism.Plugins.Library">
+                        <Files Include="!(bindpath.Prism.Plugins.Library)\**" />
+                    </Directory>
+                </Directory>
+
+            </Directory>
+        </StandardDirectory>
+
+    </Package>
+</Wix>

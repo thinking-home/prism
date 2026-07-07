@@ -6,7 +6,9 @@
   двухчасовой `.mkv`) и отдаёт **только HTTP API**: данные библиотеки и потоковое
   видео. Если файл уже в браузерном формате — стримит напрямую; иначе, при наличии
   нужного кодека в системе, обрабатывает через **ffmpeg** и выдаёт **H264 или H265**
-  по HLS.
+  по HLS. Сам `Prism.Host` — библиотека; запускаемые обёртки над ней:
+  **Prism.Host.Console** (обычный запуск, разработка) и **Prism.Host.Service**
+  (служба Windows, ставится инсталлятором `Prism.Host.Setup`).
 - **Prism.Client** — клиент (Node.js + TypeScript + React + Vite). Минималистичный
   веб-интерфейс: библиотека и плеер. У клиента **одна-единственная настройка — URL
   сервера**; всё остальное он получает от сервера запросом (`/api/info`).
@@ -110,9 +112,10 @@ CPU при перемотках в разы и опускает нагрузку
   и `IMediaMetaSource` (подмешивает произвольные пары ключ-значение к записям
   `/api/media`).
 - Список активных плагинов — в `appsettings` (`"Plugins": ["Prism.Plugins.Library"]`).
-  Каждый грузится из `Prism.Host/plugins/<имя>/<имя>.dll` в собственный
-  `AssemblyLoadContext` (зависимости плагина резолвятся из его папки; контракт — из
-  хоста). Build плагина копирует его в `plugins/` автоматически.
+  Каждый грузится из `plugins/<имя>/<имя>.dll` (папка рядом с приложением) в
+  собственный `AssemblyLoadContext` (зависимости плагина резолвятся из его папки;
+  контракт — из хоста). Build плагина копирует его в `Prism.Host.Console/plugins/`
+  автоматически; в установку службы плагины кладёт инсталлятор.
 
 ### Плагин `Prism.Plugins.Library` (метаданные)
 
@@ -219,24 +222,24 @@ sudo snap install ffmpeg
 
 Нужно запустить оба приложения.
 
-### 1. Сервер — Prism.Host
+### 1. Сервер — Prism.Host.Console
 
 ```bash
 # один раз собрать решение — заодно развернутся включённые плагины в plugins/
 dotnet build Prism.sln
 
-# положите видео в Prism.Host/videos/  (или укажите папку через --media)
-dotnet run --project Prism.Host
+# положите видео в Prism.Host.Console/videos/  (или укажите папку через --media)
+dotnet run --project Prism.Host.Console
 # API слушает http://localhost:8080
 ```
 
 Параметры командной строки:
 
 ```bash
-dotnet run --project Prism.Host -- --file "/путь/к/movie.mkv"    # отдать папку с этим файлом
-dotnet run --project Prism.Host -- --media "/путь/к/библиотеке"  # отдать папку
-dotnet run --project Prism.Host -- --codec h265                  # выдавать HEVC вместо H264
-dotnet run --project Prism.Host -- --ffmpeg /opt/homebrew/bin/ffmpeg
+dotnet run --project Prism.Host.Console -- --file "/путь/к/movie.mkv"    # отдать папку с этим файлом
+dotnet run --project Prism.Host.Console -- --media "/путь/к/библиотеке"  # отдать папку
+dotnet run --project Prism.Host.Console -- --codec h265                  # выдавать HEVC вместо H264
+dotnet run --project Prism.Host.Console -- --ffmpeg /opt/homebrew/bin/ffmpeg
 ```
 
 ### 2. Клиент — Prism.Client
@@ -252,7 +255,33 @@ npm run dev          # дев-сервер на http://localhost:5173
 (шестерёнка в шапке, по умолчанию `http://<хост>:8080`, сохраняется в localStorage).
 Остальные параметры клиент берёт с сервера через `/api/info`.
 
-## Конфигурация (`Prism.Host/appsettings.json`, секция `Player`)
+## Служба Windows и инсталлятор
+
+На Windows хост ставится как служба (`Prism.Host.Service`) — MSI собирает
+проект `Prism.Host.Setup` (WiX 6 приезжает из NuGet при сборке, отдельно
+ставить ничего не нужно). Проект входит в решение, но собирается только в
+конфигурации Release:
+
+```bash
+dotnet build Prism.sln -c Release
+# → Prism.Host.Setup/bin/Release/PrismHostSetup.msi
+```
+
+Сборка MSI сама публикует службу одним exe (self-contained — .NET на целевой
+машине не нужен) и плагин (`ProjectReference Publish="true"` в `.wixproj` —
+MSI пакует publish-выход, поэтому публикация и есть часть его сборки).
+Инсталлятор ставит всё в
+`C:\Program Files\Prism Host`, регистрирует службу **Prism Host** (автозапуск,
+LocalSystem, стартует сразу после установки) и открывает входящие подключения
+в брандмауэре для локальной сети. Деинсталляция останавливает и удаляет службу.
+
+Конфигурация установленного экземпляра — `C:\Program Files\Prism Host\appsettings.json`
+(после правки перезапустить службу: `sc stop PrismHost && sc start PrismHost`).
+
+## Конфигурация (`appsettings.json`, секция `Player`)
+
+У каждого запускаемого проекта свой `appsettings.json`: у `Prism.Host.Console` —
+конфигурация разработки, у `Prism.Host.Service` — то, что уезжает в установку.
 
 | Ключ               | По умолчанию | Назначение |
 |--------------------|--------------|------------|

@@ -31,13 +31,13 @@
         <PackageReference Include="ThinkingHome.Migrator.Providers.PostgreSQL" Version="3.10.0" />
     </ItemGroup>
 
-    <!-- Деплой плагина в папку хоста, откуда его грузит PluginLoader. -->
+    <!-- Деплой плагина в папку консольного запуска, откуда его грузит PluginLoader. -->
     <Target Name="DeployToHost" AfterTargets="Build">
         <ItemGroup>
             <PluginOut Include="$(TargetDir)**\*" Exclude="$(TargetDir)Prism.Abstractions.dll" />
         </ItemGroup>
         <Copy SourceFiles="@(PluginOut)"
-              DestinationFolder="$(MSBuildProjectDirectory)\..\Prism.Host\plugins\Prism.Plugins.Library\%(RecursiveDir)"
+              DestinationFolder="$(MSBuildProjectDirectory)\..\Prism.Host.Console\plugins\Prism.Plugins.Library\%(RecursiveDir)"
               SkipUnchangedFiles="true" />
     </Target>
 

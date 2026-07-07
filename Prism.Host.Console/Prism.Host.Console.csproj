@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <!-- Запуск сервера из консоли (dotnet run) — сценарий разработки. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <InvariantGlobalization>true</InvariantGlobalization>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Prism.Host\Prism.Host.csproj" />
+    </ItemGroup>
+
+    <!-- Дев-раскладка плагинов (plugins/) — не контент приложения: иначе Web SDK
+         затягивает её *.json в publish. -->
+    <ItemGroup>
+        <Content Remove="plugins\**" />
+    </ItemGroup>
+
+</Project>
