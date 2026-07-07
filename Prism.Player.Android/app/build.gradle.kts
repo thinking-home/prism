@@ -1,7 +1,16 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 // Build-файл модуля приложения.
 plugins {
     id("com.android.application")       // это Android-приложение
     id("org.jetbrains.kotlin.android")  // на языке Kotlin
+}
+
+// Данные для подписи release читаем из keystore.properties (файл и ключ — не в git).
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) load(FileInputStream(keystorePropsFile))
 }
 
 android {
@@ -22,6 +31,26 @@ android {
     // чтобы подставлять настройки эмулятора только в отладочной сборке.
     buildFeatures {
         buildConfig = true
+    }
+
+    // Подпись release-сборки. Ключ и пароли — в keystore.properties (см. README «Сборка»).
+    signingConfigs {
+        create("release") {
+            if (keystorePropsFile.exists()) {
+                storeFile = rootProject.file(keystoreProps["storeFile"] as String)
+                storePassword = keystoreProps["storePassword"] as String
+                keyAlias = keystoreProps["keyAlias"] as String
+                keyPassword = keystoreProps["keyPassword"] as String
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // В release BuildConfig.DEBUG=false → id плеера = UUID, поля настроек пустые.
+            isMinifyEnabled = false // без обфускации (Paho/Media3 используют рефлексию)
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     // Компилируем Java/Kotlin под уровень языка 17 (JDK 21 это умеет).

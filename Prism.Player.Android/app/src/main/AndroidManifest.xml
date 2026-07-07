@@ -14,8 +14,15 @@
     <!-- «Поверх других приложений» — чтобы вывести видео на экран из фона по команде. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Android TV: поддержка leanback и отсутствие требования тачскрина
+         (иначе на ТВ приложение считается несовместимым). -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
     <application
         android:label="Prism Player"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/banner"
         android:usesCleartextTraffic="true"><!-- разрешить http:// (Prism без https) -->
 
         <!-- Единственный экран приложения. -->
@@ -26,6 +33,8 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <!-- LEANBACK_LAUNCHER — иконка/баннер на домашнем экране Android TV. -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
 

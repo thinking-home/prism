@@ -18,13 +18,16 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 
 ## Стек
 
-- **Kotlin**, **Media3/ExoPlayer** (HLS, дорожки, субтитры, скорость);
+- **Kotlin**, **Media3/ExoPlayer** — воспроизведение HLS (переключение дорожек/
+  субтитров/скорости — на будущее, см. TODO);
 - **`PlaybackService`** (`MediaSessionService`) — проигрыватель + медиа-сессия;
   Media3 сама показывает медиа-уведомление (управление пультом/CEC/ассистентом);
 - **`MqttService`** — всегда-живая служба переднего плана: MQTT-клиент + «пульт»
   (`MediaController`) к плееру; своё постоянное уведомление;
-- **UI на Compose for TV** — библиотека + плеер, навигация D-pad;
-- лаунчер-иконка (`LEANBACK_LAUNCHER` + banner), deep-link `prism://play/{id}`.
+- **UI на обычных Android View** (без Compose): главный экран (название, кнопка
+  «Настройки», статус брокера) + экран плеера; навигация D-pad. Обзора библиотеки в
+  самом плеере нет — это дело координатора/веб-клиента.
+- иконка + TV-баннер (`LEANBACK_LAUNCHER`) — приложение видно на домашнем экране Android TV.
 
 ## Конфигурация
 
@@ -54,7 +57,7 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
   управления при кратком сбое брокера.
 - **Статус брокера** — мелкая надпись у нижнего края стартового экрана:
   «Брокер: подключено» / «Брокер: нет связи» (при воспроизведении скрыта).
-- **Хост/поток недоступен** (или неверный `mediaId`): ExoPlayer отдаёт ошибку —
+- **Хост/поток недоступен** (или неверный `url`): ExoPlayer отдаёт ошибку —
   показываем надпись «Не удалось открыть видео» поверх видео и больше ничего не
   делаем; она исчезает при следующем `open`.
 
@@ -75,14 +78,14 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 
 ```jsonc
 // info
-{"name":"Гостиная","capabilities":["open","close"]}
+{"name":"Гостиная","capabilities":["open","close","refresh"]}
 
 // state (retained); title / произвольная meta — позже (см. TODO)
 {"status":"playing",           // idle | buffering | playing | paused | ended
  "url":"http://host/hls/abc123/playlist.m3u8","positionSec":123.4,"durationSec":2555.1}
 
-// event
-{"type":"ended","mediaId":"abc123"}
+// event (пока не реализовано)
+{"type":"ended","url":"http://host/hls/abc123/playlist.m3u8"}
 {"type":"error","message":"..."}
 ```
 
@@ -111,6 +114,8 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 - Обнаружение плееров — подписка на `prism/player/+/info` и `prism/player/+/state`.
 - Команды MQTT и локальный пульт/ассистент идут в **один и тот же** внутренний
   контроллер плеера — единый путь управления.
+- **Сейчас реализованы** `open` / `close` / `refresh`; остальные команды — по
+  `TODO.md` п.1.
 
 ### Поток «включи фильм X»
 
@@ -155,6 +160,21 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 Требуется Android Studio / Android SDK (JDK, `adb`, Gradle). Сборка из терминала:
 
 ```bash
-./gradlew assembleDebug        # собрать APK
-./gradlew installDebug         # установить на подключённое устройство/эмулятор
+./gradlew assembleDebug        # debug-APK (для тестов; id=emulator, дефолты 10.0.2.2)
+./gradlew installDebug         # установить debug на подключённое устройство/эмулятор
 ```
+
+**Debug vs release.** В debug-сборке `id` плеера зашит как `emulator`, а поля настроек
+предзаполнены адресами эмулятора (`10.0.2.2`) — удобно для тестов, но НЕ для продакшена
+(несколько устройств получат одинаковый `id`). **Release-сборка** даёт уникальный
+`UUID`-id и пустые поля — её и ставим на приставки:
+
+```bash
+./gradlew assembleRelease      # → app/build/outputs/apk/release/app-release.apk
+```
+
+Подпись release настроена через `keystore.properties` (в корне Android-проекта, НЕ в
+git) и keystore `prism-release.jks`. **Храни `prism-release.jks` в надёжном месте:** без
+того же ключа обновление поверх установленного приложения не встанет (подпись обязана
+совпадать). Иконка (`app-icon.png`) и TV-баннер уже в манифесте — приложение появляется
+на домашнем экране Android TV.
