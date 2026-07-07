@@ -23,6 +23,7 @@
         android:label="Prism Player"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
+        android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true"><!-- разрешить http:// (Prism без https) -->
 
         <!-- Единственный экран приложения. -->

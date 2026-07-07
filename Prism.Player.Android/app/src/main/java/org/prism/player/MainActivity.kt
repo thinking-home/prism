@@ -28,6 +28,7 @@ class MainActivity : Activity() {
     private var menuView: View? = null
     private var statusText: TextView? = null
     private var errorText: TextView? = null
+    private var controller: MediaController? = null
 
     // onStart — экран становится видимым.
     override fun onStart() {
@@ -89,7 +90,10 @@ class MainActivity : Activity() {
         }
 
         root.addView(menu)
-        root.addView(view)
+        root.addView(view, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+        )) // видео на весь экран
         root.addView(error)
         root.addView(status)
         setContentView(root)
@@ -107,20 +111,21 @@ class MainActivity : Activity() {
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
         future.addListener({
-            val controller = future.get()
-            view.player = controller
+            val c = future.get()
+            controller = c
+            view.player = c
             // Реагируем на открытие/закрытие файла, чтобы переключать заглушку/видео.
-            controller.addListener(object : Player.Listener {
+            c.addListener(object : Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     errorText?.visibility = View.GONE // новый файл — прячем прошлую ошибку
-                    updateUi(controller)
+                    updateUi(c)
                 }
-                override fun onPlaybackStateChanged(playbackState: Int) = updateUi(controller)
+                override fun onPlaybackStateChanged(playbackState: Int) = updateUi(c)
                 override fun onPlayerError(error: PlaybackException) {
                     errorText?.visibility = View.VISIBLE
                 }
             })
-            updateUi(controller) // начальное состояние
+            updateUi(c) // начальное состояние
         }, MoreExecutors.directExecutor())
         controllerFuture = future
     }
@@ -142,8 +147,10 @@ class MainActivity : Activity() {
     // onStop — экран скрыт: отключаемся от сервиса (сервис и проигрывание живут дальше).
     override fun onStop() {
         super.onStop()
+        controller?.pause() // пауза при сворачивании плеера в фон
         MqttStatus.listener = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
+        controller = null
     }
 }
