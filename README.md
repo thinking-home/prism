@@ -264,7 +264,7 @@ npm run dev          # дев-сервер на http://localhost:5173
 
 ```bash
 dotnet build Prism.sln -c Release
-# → Prism.Host.Setup/bin/Release/PrismHostSetup.msi
+# → Prism.Host.Setup/bin/Release/en-US/PrismHostSetup.msi
 ```
 
 Сборка MSI сама публикует службу одним exe (self-contained — .NET на целевой
@@ -275,8 +275,64 @@ MSI пакует publish-выход, поэтому публикация и ес
 LocalSystem, стартует сразу после установки) и открывает входящие подключения
 в брандмауэре для локальной сети. Деинсталляция останавливает и удаляет службу.
 
-Конфигурация установленного экземпляра — `C:\Program Files\Prism Host\appsettings.json`
-(после правки перезапустить службу: `sc stop PrismHost && sc start PrismHost`).
+**Корневая папка с видео** выбирается в диалоге инсталлятора (по умолчанию
+`C:\Videos`). Путь передаётся службе аргументом `--media` и запоминается в
+реестре (`HKLM\SOFTWARE\Prism\Host\MediaFolder`) — обновление подхватит прошлый
+выбор.
+
+**Бесшумная установка** (без диалогов; из консоли администратора) — тем же
+способом можно сменить папку с видео без переустановки вручную:
+
+```bat
+msiexec /i PrismHostSetup.msi /qn MEDIAFOLDER=D:\Video
+
+:: с журналом установки, если что-то пошло не так
+msiexec /i PrismHostSetup.msi /qn MEDIAFOLDER=D:\Video /l*v install.log
+```
+
+Остальная конфигурация установленного экземпляра — `C:\Program Files\Prism Host\appsettings.json`
+(после правки перезапустить службу: `sc stop PrismHost && sc start PrismHost`;
+папку с видео там менять бесполезно — аргумент `--media` из установки имеет
+приоритет).
+
+> Для сборки MSI ничего ставить не нужно (`dotnet build` сам тянет WiX из
+> NuGet), но чтобы `.wixproj` открывался в Visual Studio, нужно бесплатное
+> расширение [HeatWave for VS](https://www.firegiant.com/heatwave/) от
+> FireGiant. Без него VS просто покажет проект как невыгруженный — сборке из
+> CLI это не мешает. JetBrains Rider открывает `.wixproj` без расширений.
+
+## MQTT-брокер
+
+Android-плеер ([Prism.Player.Android](Prism.Player.Android/README.md)) управляется
+и публикует свой статус по MQTT — нужен любой брокер в локальной сети, например
+[Eclipse Mosquitto](https://mosquitto.org/download/).
+
+### Минимальная настройка на Windows
+
+1. Установите mosquitto (инсталлятор с сайта регистрирует его службой Windows).
+2. По умолчанию mosquitto ≥ 2.0 слушает **только localhost** — внешние клиенты
+   (плеер) подключиться не смогут. Добавьте в конец
+   `C:\Program Files\Mosquitto\mosquitto.conf`:
+
+   ```
+   listener 1883 0.0.0.0
+   allow_anonymous true
+   ```
+
+   `allow_anonymous true` обязателен: как только объявлен `listener`, анонимный
+   доступ автоматически запрещается. Для домашней сети за роутером этого
+   достаточно; если брокер доступен извне — вместо анонимного доступа заведите
+   пользователя (`mosquitto_passwd` + `password_file` в конфиге).
+3. Перезапустите службу и откройте порт в брандмауэре (PowerShell от
+   администратора):
+
+   ```powershell
+   Restart-Service mosquitto
+   New-NetFirewallRule -DisplayName "Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -Action Allow
+   ```
+
+Проверка: `Get-NetTCPConnection -State Listen -LocalPort 1883` должен показать
+адрес `0.0.0.0`, а не `127.0.0.1`.
 
 ## Конфигурация (`appsettings.json`, секция `Player`)
 

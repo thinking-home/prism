@@ -4,19 +4,46 @@
      действий нет. Файлы берутся из publish-выхода проектов — bindpath'ы
      !(bindpath.*) создаёт ProjectReference Publish="true" в .wixproj. -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
-    <!-- Language/Codepage 1049/1251 — русские строки в базе MSI. -->
+    <!-- Инсталлятор не локализован (en-US по умолчанию): видимые пользователю
+         строки — английские, это избавляет от возни с культурами и переводом
+         строк расширений. -->
     <Package Name="Prism Host"
              Manufacturer="Prism"
              Version="0.1.0"
              UpgradeCode="8360D512-7A9E-4DA9-8645-BD7E5D061883"
-             Scope="perMachine"
-             Language="1049"
-             Codepage="1251">
+             Scope="perMachine">
 
-        <MajorUpgrade DowngradeErrorMessage="Уже установлена более новая версия Prism Host." />
+        <MajorUpgrade DowngradeErrorMessage="A newer version of Prism Host is already installed." />
         <MediaTemplate EmbedCab="yes" />
+
+        <!-- Папка с видео: выбирается в UI инсталлятора (стандартный набор
+             диалогов WixUI_InstallDir перенацелен на MEDIAFOLDER — куда ставить
+             саму программу, пользователю выбирать незачем). Диалог лицензии
+             пропускаем: Publish с бо́льшим Order перекрывает штатные переходы. -->
+        <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="MEDIAFOLDER" />
+        <UI>
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="99" />
+            <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="99" />
+        </UI>
+
+        <!-- «Запоминание» выбранной папки (стандартный remember-паттерн):
+             при установке путь пишется в реестр (компонент MediaFolderReg ниже),
+             при обновлении — вычитывается обратно, если не задан явно
+             (msiexec ... MEDIAFOLDER=D:\Video). -->
+        <Property Id="MEDIAFOLDER" Secure="yes" />
+        <Property Id="PRISM_SAVED_MEDIAFOLDER">
+            <RegistrySearch Id="SavedMediaFolder" Root="HKLM" Key="SOFTWARE\Prism\Host" Name="MediaFolder" Type="raw" />
+        </Property>
+        <SetProperty Id="MEDIAFOLDER" Value="[PRISM_SAVED_MEDIAFOLDER]" After="AppSearch"
+                     Condition="NOT MEDIAFOLDER AND PRISM_SAVED_MEDIAFOLDER" />
+
+        <!-- Папка по умолчанию: <корневой диск>\Videos (меняется в диалоге). -->
+        <StandardDirectory Id="TARGETDIR">
+            <Directory Id="MEDIAFOLDER" Name="Videos" />
+        </StandardDirectory>
 
         <StandardDirectory Id="ProgramFiles64Folder">
             <Directory Id="INSTALLFOLDER" Name="Prism Host">
@@ -28,18 +55,24 @@
                         <!-- Плееры (Android TV) ходят на Kestrel из локальной сети. -->
                         <fw:FirewallException Id="PrismHostLan"
                                               Name="Prism Host"
-                                              Description="Prism Host — стриминг видео по HTTP (HLS)."
+                                              Description="Prism Host - HTTP (HLS) video streaming."
                                               Scope="localSubnet"
                                               Profile="all" />
                     </File>
+                    <!-- Выбранная папка с видео уходит службе штатным аргументом
+                         «media» командной строки (хост его уже умеет). Хвостовой
+                         '\' перед закрывающей кавычкой — экранирование:
+                         [MEDIAFOLDER] заканчивается на '\', и без добавочного
+                         он «съел» бы кавычку при разборе командной строки. -->
                     <ServiceInstall Id="PrismHostService"
                                     Name="PrismHost"
                                     DisplayName="Prism Host"
-                                    Description="Медиа-сервер Prism: раздаёт видео из локальной папки по HTTP (HLS)."
+                                    Description="Prism media server: streams video from a local folder over HTTP (HLS)."
                                     Type="ownProcess"
                                     Start="auto"
                                     Account="LocalSystem"
-                                    ErrorControl="normal" />
+                                    ErrorControl="normal"
+                                    Arguments="--media &quot;[MEDIAFOLDER]\&quot;" />
                     <ServiceControl Id="PrismHostControl"
                                     Name="PrismHost"
                                     Start="install"
@@ -50,6 +83,15 @@
 
                 <Component Id="AppSettings">
                     <File Source="!(bindpath.Prism.Host.Service)\appsettings.json" />
+                </Component>
+
+                <!-- Путь к папке с видео в реестре: отсюда его вычитывает
+                     обновление (remember-паттерн выше), позже — интеграция
+                     с проводником. -->
+                <Component Id="MediaFolderReg">
+                    <RegistryValue Root="HKLM" Key="SOFTWARE\Prism\Host"
+                                   Name="MediaFolder" Type="string"
+                                   Value="[MEDIAFOLDER]" KeyPath="yes" />
                 </Component>
 
                 <!-- Плагины — как в дев-раскладке: plugins/<имя>/… ; содержимое
