@@ -1,7 +1,6 @@
 using Prism.Abstractions;
 using Prism.Host;
 using Prism.Host.Media;
-using Prism.Host.Plugins;
 
 var builder = WebApplication.CreateBuilder(args);
 

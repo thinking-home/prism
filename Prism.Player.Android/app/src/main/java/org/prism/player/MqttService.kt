@@ -12,6 +12,8 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import org.json.JSONArray
+import org.json.JSONObject
 
 // Всегда-живая служба переднего плана: держит MQTT-клиент и «пульт» (MediaController)
 // к службе-плееру PlaybackService. Своё уведомление она НИКОГДА не снимает — поэтому
@@ -41,6 +43,8 @@ class MqttService : Service() {
             mqttPassword = Settings.mqttPassword(this),
             onOpen = { url -> openFile(url) },
             onClose = { closeFile() },
+            onConnected = { publishInfo() },
+            onRefresh = { publishInfo() },
         )
         mqtt?.start()
     }
@@ -71,6 +75,15 @@ class MqttService : Service() {
     // Закрыть файл: убрать его — плеер снова «пустой».
     private fun closeFile() {
         controller?.clearMediaItems()
+    }
+
+    // Опубликовать статичную инфу о плеере (для обнаружения): имя + возможности.
+    private fun publishInfo() {
+        val name = Settings.playerName(this).ifEmpty { Settings.playerId(this) }
+        val info = JSONObject()
+            .put("name", name)
+            .put("capabilities", JSONArray(listOf("open", "close", "refresh")))
+        mqtt?.publish(Settings.infoTopic(this), info.toString(), retain = true)
     }
 
     override fun onDestroy() {

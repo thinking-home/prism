@@ -54,8 +54,9 @@ object Settings {
     fun playerName(ctx: Context): String =
         prefs(ctx).getString(KEY_PLAYER_NAME, null) ?: ""
 
-    // Вычисляемые из id: топик команд и client-id подключения к брокеру.
+    // Вычисляемые из id: топики и client-id подключения к брокеру.
     fun cmdTopic(ctx: Context): String = "prism/player/${playerId(ctx)}/cmd"
+    fun infoTopic(ctx: Context): String = "prism/player/${playerId(ctx)}/info"
     fun clientId(ctx: Context): String = "prism-player-${playerId(ctx)}"
 
     // Сохранить редактируемые поля разом (id не редактируется — его не трогаем).
