@@ -66,7 +66,6 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 
 | Топик | Назначение | Retain |
 |-------|-----------|:------:|
-| `prism/player/{id}/availability` | `"online"` / `"offline"` (LWT = `offline`) | да |
 | `prism/player/{id}/info` | статичная инфа о плеере | да |
 | `prism/player/{id}/state` | текущее состояние (при изменениях + позиция) | да |
 | `prism/player/{id}/event` | разовые события | нет |
@@ -78,11 +77,9 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 // info
 {"name":"Гостиная","capabilities":["open","close"]}
 
-// state
+// state (retained); title / произвольная meta — позже (см. TODO)
 {"status":"playing",           // idle | buffering | playing | paused | ended
- "mediaId":"abc123","title":"Патриот · S01E02",
- "positionSec":123.4,"durationSec":2555.1,
- "audio":0,"subtitle":null,"rate":1.0}
+ "url":"http://host/hls/abc123/playlist.m3u8","positionSec":123.4,"durationSec":2555.1}
 
 // event
 {"type":"ended","mediaId":"abc123"}
@@ -94,7 +91,7 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 Топик `prism/player/{id}/cmd`, пейлоад — JSON:
 
 ```jsonc
-{"action":"play","url":"http://host/hls/abc123/playlist.m3u8","mediaId":"abc123","positionSec":0,"audio":0,"subtitle":null}
+{"action":"play","url":"http://host/hls/abc123/playlist.m3u8","positionSec":0,"audio":0,"subtitle":null}
 {"action":"pause"}
 {"action":"resume"}
 {"action":"stop"}
@@ -104,10 +101,13 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 {"action":"setAudio","index":1}
 {"action":"setSubtitle","index":0}     // отсутствует/null = выкл
 {"action":"setRate","rate":2.0}
+{"action":"refresh"}                   // немедленно перепубликовать info + state
 ```
 
-- `state` и `availability` — **retained**: поздно подключившийся координатор сразу
-  видит, кто онлайн и что играет.
+- `info` и `state` — **retained**: поздно подключившийся координатор сразу видит, кто
+  есть и что играет. Ливность плеера — по свежести периодического `state` (отдельного
+  `availability`/LWT нет); при желании координатор шлёт команду `refresh` для
+  немедленного ответа.
 - Обнаружение плееров — подписка на `prism/player/+/info` и `prism/player/+/state`.
 - Команды MQTT и локальный пульт/ассистент идут в **один и тот же** внутренний
   контроллер плеера — единый путь управления.
@@ -117,9 +117,9 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 1. Координатор (TH) резолвит название → **абсолютный URL потока**: `/api/media`
    возвращает `streamUrl` (напр. `/hls/{id}/playlist.m3u8`), координатор подставляет
    хост нужного Prism.
-2. Публикует `{"action":"play","url":"http://host/hls/…/playlist.m3u8","mediaId":"…"}`
+2. Публикует `{"action":"play","url":"http://host/hls/…/playlist.m3u8"}`
    в `prism/player/{id}/cmd`.
-3. Плеер играет присланный URL, обновляя `state`.
+3. Плеер играет присланный URL, обновляя `state` (в нём и репортит этот `url`).
 
 `next`/`previous` — «следующая/предыдущая серия»: поскольку плеер host-agnostic и не
 знает библиотеку, соседний эпизод вычисляет **координатор** и шлёт его URL.
