@@ -11,7 +11,7 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 
 // Подключается к MQTT-брокеру, слушает команды и передаёт их наружу двумя
-// колбэками: onOpen(mediaId) и onClose(). Сам плеер здесь не трогаем — этим
+// колбэками: onOpen(url) и onClose(). Сам плеер здесь не трогаем — этим
 // занимается сервис (там команды выполняются в главном потоке).
 // Адрес брокера, id, топик и логин/пароль приходят из настроек (Settings).
 // Подключение — с бесконечными повторами: если брокер недоступен, пробуем снова
@@ -22,7 +22,7 @@ class MqttController(
     private val cmdTopic: String,
     private val mqttUser: String,
     private val mqttPassword: String,
-    private val onOpen: (mediaId: String) -> Unit,
+    private val onOpen: (url: String) -> Unit,
     private val onClose: () -> Unit,
 ) {
     // Главный поток — на нём живёт плеер, туда переключаемся перед вызовом колбэков.
@@ -91,8 +91,8 @@ class MqttController(
         val json = try { JSONObject(payload) } catch (e: Exception) { return }
         when (json.optString("action")) {
             "open" -> {
-                val id = json.optString("mediaId")
-                if (id.isNotEmpty()) main.post { onOpen(id) }
+                val url = json.optString("url")
+                if (url.isNotEmpty()) main.post { onOpen(url) }
             }
             "close" -> main.post { onClose() }
         }

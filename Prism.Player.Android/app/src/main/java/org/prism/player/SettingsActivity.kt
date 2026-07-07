@@ -35,7 +35,6 @@ class SettingsActivity : Activity() {
         }
 
         val uriType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        val prismField = field("URL сервера Prism", Settings.prismUrl(this), uriType)
         val brokerField = field("Адрес MQTT-брокера", Settings.brokerUrl(this), uriType)
         val userField = field(
             "Логин MQTT (необязательно)", Settings.mqttUser(this), InputType.TYPE_CLASS_TEXT,
@@ -58,7 +57,6 @@ class SettingsActivity : Activity() {
         save.setOnClickListener {
             Settings.save(
                 this,
-                prismField.text.toString().trim(),
                 brokerField.text.toString().trim(),
                 userField.text.toString().trim(),
                 passField.text.toString(),

@@ -39,7 +39,7 @@ class MqttService : Service() {
             cmdTopic = Settings.cmdTopic(this),
             mqttUser = Settings.mqttUser(this),
             mqttPassword = Settings.mqttPassword(this),
-            onOpen = { mediaId -> openFile(mediaId) },
+            onOpen = { url -> openFile(url) },
             onClose = { closeFile() },
         )
         mqtt?.start()
@@ -57,13 +57,10 @@ class MqttService : Service() {
     // Не останавливаемся при закрытии приложения — MQTT должен слушать дальше.
     override fun onTaskRemoved(rootIntent: Intent?) {}
 
-    // Открыть файл: скомандовать плееру играть поток и вывести экран на передний план.
-    private fun openFile(mediaId: String) {
+    // Открыть файл: скомандовать плееру играть присланный URL и вывести экран вперёд.
+    private fun openFile(url: String) {
         val c = controller ?: return
-        // Адрес Prism не настроен — играть неоткуда, ничего не делаем (не падаем).
-        val base = Settings.prismUrl(this)
-        if (base.isEmpty()) return
-        c.setMediaItem(MediaItem.fromUri("$base/hls/$mediaId/playlist.m3u8"))
+        c.setMediaItem(MediaItem.fromUri(url))
         c.prepare()
         c.play()
         startActivity(

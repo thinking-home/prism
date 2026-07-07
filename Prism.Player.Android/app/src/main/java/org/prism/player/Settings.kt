@@ -11,7 +11,6 @@ object Settings {
 
     private const val PREFS = "prism_settings"
 
-    private const val KEY_PRISM_URL = "prism_url"
     private const val KEY_BROKER_URL = "broker_url"
     private const val KEY_MQTT_USER = "mqtt_user"
     private const val KEY_MQTT_PASSWORD = "mqtt_password"
@@ -19,19 +18,13 @@ object Settings {
     private const val KEY_PLAYER_ID = "player_id"
 
     // Значения для эмулятора — подставляются только в отладочной сборке.
-    private const val DEBUG_PRISM_URL = "http://10.0.2.2:8080"
     private const val DEBUG_BROKER_URL = "tcp://10.0.2.2:1883"
     private const val DEBUG_PLAYER_ID = "emulator"
 
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    // Адрес сервера Prism. Нет сохранённого значения → дефолт (debug: эмулятор, иначе пусто).
-    fun prismUrl(ctx: Context): String =
-        prefs(ctx).getString(KEY_PRISM_URL, null)
-            ?: if (BuildConfig.DEBUG) DEBUG_PRISM_URL else ""
-
-    // Адрес MQTT-брокера. Логика дефолта такая же, как у prismUrl.
+    // Адрес MQTT-брокера. Нет сохранённого значения → дефолт (debug: эмулятор, иначе пусто).
     fun brokerUrl(ctx: Context): String =
         prefs(ctx).getString(KEY_BROKER_URL, null)
             ?: if (BuildConfig.DEBUG) DEBUG_BROKER_URL else ""
@@ -68,14 +61,12 @@ object Settings {
     // Сохранить редактируемые поля разом (id не редактируется — его не трогаем).
     fun save(
         ctx: Context,
-        prismUrl: String,
         brokerUrl: String,
         mqttUser: String,
         mqttPassword: String,
         playerName: String,
     ) {
         prefs(ctx).edit()
-            .putString(KEY_PRISM_URL, prismUrl)
             .putString(KEY_BROKER_URL, brokerUrl)
             .putString(KEY_MQTT_USER, mqttUser)
             .putString(KEY_MQTT_PASSWORD, mqttPassword)

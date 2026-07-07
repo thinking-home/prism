@@ -3,11 +3,18 @@
 Список отложенных задач. Порядок и приоритеты — по решению пользователя.
 
 ## 1. Полностью реализовать MQTT-протокол
-Сейчас плеер принимает только `open` / `close`. Нужно:
+Сейчас плеер принимает только `open` / `close`. `open` несёт **абсолютный `url`**
+(что играть) — плеер host-agnostic, `mediaId` в команде опционален (для репорта).
+Нужно:
 - добавить остальные команды из контракта: `pause`, `resume`, `stop`, `seek`,
   `next`, `previous`, `setAudio`, `setSubtitle`, `setRate`;
-- добавить **отправку статуса** в MQTT: `state` (retained), `availability`
-  (retained, LWT = offline), `info` (retained, с `prismUrl`), `event`.
+  - `next`/`previous` считает координатор (плеер не знает библиотеку) и шлёт URL;
+  - `setAudio`/`setSubtitle` **зависят от мультитрек-HLS Prism** (корневой `TODO.md`,
+    п.3): переключение — через ExoPlayer из одного URL;
+- добавить **отправку статуса** в MQTT: `state` (retained), `info` (retained: `name`,
+  `capabilities` — БЕЗ `prismUrl`), `event`. Ливность — по свежести периодического
+  `state` (обсуждали отказ от `availability`/LWT в пользу этого + опц. команда
+  `refresh`; финально не подтверждено).
 
 Контракт топиков/пейлоадов — в `README.md` (раздел «MQTT-контракт управления»).
 
