@@ -3,12 +3,14 @@ package org.prism.player
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -19,8 +21,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 
 // Экран подключается к сервису и показывает либо видео (когда файл открыт),
-// либо заглушку с названием приложения (когда файла нет). Внизу — мелкий статус
-// подключения к брокеру; при ошибке воспроизведения — надпись поверх видео.
+// либо главный экран (название + кнопка настроек). Внизу — мелкий статус брокера;
+// при ошибке — надпись поверх видео.
 class MainActivity : Activity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -29,13 +31,13 @@ class MainActivity : Activity() {
     private var statusText: TextView? = null
     private var errorText: TextView? = null
     private var controller: MediaController? = null
+    private var lastBackMs = 0L // для «двойного Back» при закрытии фильма
 
     // onStart — экран становится видимым.
     override fun onStart() {
         super.onStart()
 
-        // Гарантируем, что служба MQTT запущена как «переднего плана» (чтобы слушала
-        // команды даже после закрытия приложения). Если уже запущена — ничего не будет.
+        // Гарантируем, что служба MQTT запущена как «переднего плана».
         startForegroundService(Intent(this, MqttService::class.java))
 
         // Контейнер: по центру — «меню» (название + кнопка настроек), поверх — видео.
@@ -63,8 +65,7 @@ class MainActivity : Activity() {
 
         val view = PlayerView(this)
 
-        // Надпись об ошибке воспроизведения — по центру, поверх видео, скрыта до ошибки.
-        // Белый текст на полупрозрачной подложке, чтобы читалось поверх чёрного видео.
+        // Надпись об ошибке — по центру, поверх видео, скрыта до ошибки.
         val error = TextView(this).apply {
             text = "Не удалось открыть видео"
             textSize = 20f
@@ -101,9 +102,9 @@ class MainActivity : Activity() {
         menuView = menu
         errorText = error
         statusText = status
-        settings.requestFocus() // сразу фокус на кнопку — для пульта/D-pad на ТВ
+        settings.requestFocus() // фокус на кнопку — для пульта/D-pad
 
-        // Показываем текущий статус брокера и слушаем его изменения, пока экран открыт.
+        // Показываем текущий статус брокера и слушаем изменения, пока экран открыт.
         updateStatus(MqttStatus.connected)
         MqttStatus.listener = { connected -> runOnUiThread { updateStatus(connected) } }
 
@@ -114,13 +115,17 @@ class MainActivity : Activity() {
             val c = future.get()
             controller = c
             view.player = c
-            // Реагируем на открытие/закрытие файла, чтобы переключать заглушку/видео.
+            // Реагируем на открытие/закрытие файла, чтобы переключать меню/видео.
             c.addListener(object : Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     errorText?.visibility = View.GONE // новый файл — прячем прошлую ошибку
                     updateUi(c)
                 }
-                override fun onPlaybackStateChanged(playbackState: Int) = updateUi(c)
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    // Фильм доиграл до конца → закрываем его сами (возврат в меню).
+                    if (playbackState == Player.STATE_ENDED) c.clearMediaItems()
+                    updateUi(c)
+                }
                 override fun onPlayerError(error: PlaybackException) {
                     errorText?.visibility = View.VISIBLE
                 }
@@ -130,7 +135,7 @@ class MainActivity : Activity() {
         controllerFuture = future
     }
 
-    // Файл открыт, если у плеера есть текущий элемент: показываем видео, иначе — заглушку.
+    // Файл открыт, если у плеера есть текущий элемент: показываем видео, иначе — меню.
     private fun updateUi(controller: MediaController) {
         val fileOpen = controller.currentMediaItem != null
         playerView?.visibility = if (fileOpen) View.VISIBLE else View.GONE
@@ -144,7 +149,25 @@ class MainActivity : Activity() {
         statusText?.text = if (connected) "Брокер: подключено" else "Брокер: нет связи"
     }
 
-    // onStop — экран скрыт: отключаемся от сервиса (сервис и проигрывание живут дальше).
+    // Back при открытом фильме — закрыть по ДВОЙНОМУ нажатию (чтобы не сбросить прогресс
+    // случайно): первый Back — подсказка, второй в течение 3 с — закрыть и вернуться в меню.
+    // Из меню Back — обычный выход из приложения.
+    override fun onBackPressed() {
+        val c = controller
+        if (c == null || c.currentMediaItem == null) {
+            super.onBackPressed()
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastBackMs < 3000) {
+            c.clearMediaItems() // второй Back — закрыть фильм
+        } else {
+            lastBackMs = now
+            Toast.makeText(this, "Нажмите «Назад» ещё раз, чтобы закрыть", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // onStop — экран скрыт: пауза и отключение от сервиса (сервис/служба живут дальше).
     override fun onStop() {
         super.onStop()
         controller?.pause() // пауза при сворачивании плеера в фон
