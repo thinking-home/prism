@@ -12,22 +12,19 @@
          строк расширений. -->
     <Package Name="Prism Host"
              Manufacturer="Prism"
-             Version="0.1.0"
+             Version="0.2.0"
              UpgradeCode="8360D512-7A9E-4DA9-8645-BD7E5D061883"
              Scope="perMachine">
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of Prism Host is already installed." />
         <MediaTemplate EmbedCab="yes" />
 
-        <!-- Папка с видео: выбирается в UI инсталлятора (стандартный набор
-             диалогов WixUI_InstallDir перенацелен на MEDIAFOLDER — куда ставить
-             саму программу, пользователю выбирать незачем). Диалог лицензии
-             пропускаем: Publish с бо́льшим Order перекрывает штатные переходы. -->
+        <!-- UI: стандартный набор диалогов WixUI_InstallDir, где диалог выбора
+             папки перенацелен на MEDIAFOLDER — куда ставить саму программу,
+             пользователю выбирать незачем. На шаге лицензии показывается
+             License.rtf (MIT + сведения о вложенной сборке FFmpeg). -->
         <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="MEDIAFOLDER" />
-        <UI>
-            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="99" />
-            <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="99" />
-        </UI>
+        <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
 
         <!-- «Запоминание» выбранной папки (стандартный remember-паттерн):
              при установке путь пишется в реестр (компонент MediaFolderReg ниже),
@@ -93,6 +90,18 @@
                                    Name="MediaFolder" Type="string"
                                    Value="[MEDIAFOLDER]" KeyPath="yes" />
                 </Component>
+
+                <!-- Вложенная сборка ffmpeg (см. FetchFFmpeg в .wixproj):
+                     FFTools ищет её рядом с приложением, в PATH ничего
+                     прописывать не нужно. -->
+                <Directory Id="FFmpegInstallDir" Name="ffmpeg">
+                    <Component Id="FFmpegExe">
+                        <File Source="$(FFmpegBin)\ffmpeg.exe" />
+                    </Component>
+                    <Component Id="FFprobeExe">
+                        <File Source="$(FFmpegBin)\ffprobe.exe" />
+                    </Component>
+                </Directory>
 
                 <!-- Плагины — как в дев-раскладке: plugins/<имя>/… ; содержимое
                      папки публикации плагина собирается по маске при сборке MSI. -->

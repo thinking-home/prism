@@ -39,7 +39,17 @@ public sealed class FFTools
 
         var exe = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? tool + ".exe" : tool;
 
-        // 2. Поиск по всем каталогам из PATH.
+        // 2. Рядом с приложением: инсталлятор Windows кладёт вложенную сборку
+        //    в подпапку ffmpeg/. Приоритетнее PATH — это та версия, с которой
+        //    приложение поставлялось.
+        foreach (var dir in (string[])[Path.Combine(AppContext.BaseDirectory, "ffmpeg"), AppContext.BaseDirectory])
+        {
+            var candidate = Path.Combine(dir, exe);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        // 3. Поиск по всем каталогам из PATH.
         var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
         foreach (var dir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
@@ -55,7 +65,7 @@ public sealed class FFTools
             }
         }
 
-        // 3. Стандартные места установки, которых может не быть в PATH службы.
+        // 4. Стандартные места установки, которых может не быть в PATH службы.
         string[] common =
         [
             "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",

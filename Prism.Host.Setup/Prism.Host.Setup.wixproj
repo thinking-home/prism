@@ -11,6 +11,26 @@
         <OutputName>PrismHostSetup</OutputName>
     </PropertyGroup>
 
+    <!-- В MSI кладётся сборка ffmpeg (essentials, GPL — см. License.rtf и
+         LICENSE в корне). Архив пинованной версии скачивается при сборке
+         стандартными задачами MSBuild и кэшируется в obj/ — качается один раз.
+         Обновление ffmpeg = поменять версию здесь и пересобрать. -->
+    <PropertyGroup>
+        <FFmpegVersion>8.1.2</FFmpegVersion>
+        <FFmpegZip>ffmpeg-$(FFmpegVersion)-essentials_build.zip</FFmpegZip>
+        <FFmpegUrl>https://www.gyan.dev/ffmpeg/builds/packages/$(FFmpegZip)</FFmpegUrl>
+        <FFmpegCacheDir>$(MSBuildThisFileDirectory)obj\ffmpeg\</FFmpegCacheDir>
+        <FFmpegBinDir>$(FFmpegCacheDir)ffmpeg-$(FFmpegVersion)-essentials_build\bin</FFmpegBinDir>
+        <DefineConstants>FFmpegBin=$(FFmpegBinDir)</DefineConstants>
+    </PropertyGroup>
+
+    <Target Name="FetchFFmpeg" BeforeTargets="BeforeBuild"
+            Condition="!Exists('$(FFmpegBinDir)\ffmpeg.exe')">
+        <Message Importance="high" Text="Скачиваю $(FFmpegUrl) (один раз, кэш в obj/ffmpeg)" />
+        <DownloadFile SourceUrl="$(FFmpegUrl)" DestinationFolder="$(FFmpegCacheDir)" />
+        <Unzip SourceFiles="$(FFmpegCacheDir)$(FFmpegZip)" DestinationFolder="$(FFmpegCacheDir)" />
+    </Target>
+
     <ItemGroup>
         <ProjectReference Include="..\Prism.Host.Service\Prism.Host.Service.csproj" Publish="true" />
         <ProjectReference Include="..\Prism.Plugins.Library\Prism.Plugins.Library.csproj" Publish="true" />
