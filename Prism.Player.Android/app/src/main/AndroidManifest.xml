@@ -29,7 +29,8 @@
         <!-- Единственный экран приложения. -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask"><!-- один экземпляр: активация переиспользует его, не плодит новые -->
             <!-- Этот intent-filter делает экран точкой входа и кладёт иконку в меню приложений. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

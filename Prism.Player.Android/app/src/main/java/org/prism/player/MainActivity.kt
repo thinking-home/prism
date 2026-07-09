@@ -80,7 +80,7 @@ class MainActivity : Activity() {
 
         // Надпись об ошибке — по центру, поверх видео, скрыта до ошибки.
         val error = TextView(this).apply {
-            text = "Не удалось открыть видео"
+            text = getString(R.string.error_playback)
             textSize = 20f
             visibility = View.GONE
             setTextColor(0xFFFFFFFF.toInt())
@@ -163,7 +163,7 @@ class MainActivity : Activity() {
     }
 
     private fun updateStatus(connected: Boolean) {
-        statusText?.text = if (connected) "Брокер: подключено" else "Брокер: нет связи"
+        statusText?.text = getString(if (connected) R.string.mqtt_connected else R.string.mqtt_disconnected)
     }
 
     // Back при открытом фильме — закрыть по ДВОЙНОМУ нажатию (чтобы случайно не сбросить
@@ -180,7 +180,7 @@ class MainActivity : Activity() {
             c.clearMediaItems() // второй Back — закрыть фильм
         } else {
             lastBackMs = now
-            Toast.makeText(this, "Нажмите «Назад» ещё раз, чтобы закрыть", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.back_to_close), Toast.LENGTH_SHORT).show()
         }
     }
 

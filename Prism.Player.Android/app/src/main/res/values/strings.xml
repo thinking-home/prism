@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Строки по умолчанию (английский). Русские — в values-ru/strings.xml.
+     Язык выбирается автоматически по языку системы. -->
+<resources>
+    <string name="error_playback">Failed to open video</string>
+    <string name="back_to_close">Press Back again to close</string>
+    <string name="mqtt_connected">MQTT: connected</string>
+    <string name="mqtt_disconnected">MQTT: not connected</string>
+    <string name="settings_broker">MQTT broker address</string>
+    <string name="settings_user">MQTT username (optional)</string>
+    <string name="settings_password">MQTT password (optional)</string>
+    <string name="settings_name">Display name</string>
+    <string name="settings_player_id">Player ID (read-only):</string>
+    <string name="settings_save">Save</string>
+</resources>

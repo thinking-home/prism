@@ -35,23 +35,23 @@ class SettingsActivity : Activity() {
         }
 
         val uriType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        val brokerField = field("Адрес MQTT-брокера", Settings.brokerUrl(this), uriType)
+        val brokerField = field(getString(R.string.settings_broker), Settings.brokerUrl(this), uriType)
         val userField = field(
-            "Логин MQTT (необязательно)", Settings.mqttUser(this), InputType.TYPE_CLASS_TEXT,
+            getString(R.string.settings_user), Settings.mqttUser(this), InputType.TYPE_CLASS_TEXT,
         )
         val passField = field(
-            "Пароль MQTT (необязательно)", Settings.mqttPassword(this),
+            getString(R.string.settings_password), Settings.mqttPassword(this),
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
         )
         val nameField = field(
-            "Отображаемое имя", Settings.playerName(this), InputType.TYPE_CLASS_TEXT,
+            getString(R.string.settings_name), Settings.playerName(this), InputType.TYPE_CLASS_TEXT,
         )
 
         // Идентификатор плеера — только для чтения (генерируется автоматически).
-        container.addView(TextView(this).apply { text = "ID плеера (не редактируется):" })
+        container.addView(TextView(this).apply { text = getString(R.string.settings_player_id) })
         container.addView(TextView(this).apply { text = Settings.playerId(this@SettingsActivity) })
 
-        val save = Button(this).apply { text = "Сохранить" }
+        val save = Button(this).apply { text = getString(R.string.settings_save) }
         container.addView(save)
 
         save.setOnClickListener {
