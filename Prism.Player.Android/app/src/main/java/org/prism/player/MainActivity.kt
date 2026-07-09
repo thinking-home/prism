@@ -4,11 +4,12 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.os.SystemClock
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.LinearLayout
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.media3.common.MediaItem
@@ -20,14 +21,15 @@ import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 
-// Экран подключается к сервису и показывает либо видео (когда файл открыт),
-// либо главный экран (название + кнопка настроек). Внизу — мелкий статус брокера;
-// при ошибке — надпись поверх видео.
+// Экран показывает либо видео (когда файл открыт), либо главный экран: логотип по
+// центру + кнопка-шестерёнка «Настройки» в правом верхнем углу. Внизу — статус
+// брокера; при ошибке — надпись поверх видео.
 class MainActivity : Activity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var playerView: PlayerView? = null
     private var menuView: View? = null
+    private var settingsButton: View? = null
     private var statusText: TextView? = null
     private var errorText: TextView? = null
     private var controller: MediaController? = null
@@ -40,28 +42,39 @@ class MainActivity : Activity() {
         // Гарантируем, что служба MQTT запущена как «переднего плана».
         startForegroundService(Intent(this, MqttService::class.java))
 
-        // Контейнер: по центру — «меню» (название + кнопка настроек), поверх — видео.
         val root = FrameLayout(this)
-        val menu = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+
+        // Центр: логотип с названием.
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.main_screen)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER,
             )
         }
-        menu.addView(TextView(this).apply {
-            text = "Prism Player"
-            textSize = 32f
-        })
-        val settings = Button(this).apply {
-            text = "Настройки"
+
+        // Настройки — кнопка-шестерёнка в правом верхнем углу. Плоский безрамочный фон
+        // (штатный selectableItemBackgroundBorderless): прозрачный, с круглой подсветкой
+        // фокуса/нажатия. ImageButton остаётся обычной кнопкой (фокус, клик).
+        val settings = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_settings)
+            val bg = TypedValue()
+            context.theme.resolveAttribute(
+                android.R.attr.selectableItemBackgroundBorderless, bg, true,
+            )
+            setBackgroundResource(bg.resourceId)
+            val pad = (12 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.END,
+            )
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
             }
         }
-        menu.addView(settings)
 
         val view = PlayerView(this)
 
@@ -90,19 +103,21 @@ class MainActivity : Activity() {
             )
         }
 
-        root.addView(menu)
+        root.addView(logo)
         root.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT,
         )) // видео на весь экран
         root.addView(error)
         root.addView(status)
+        root.addView(settings) // поверх, в правом верхнем углу
         setContentView(root)
         playerView = view
-        menuView = menu
+        menuView = logo
+        settingsButton = settings
         errorText = error
         statusText = status
-        settings.requestFocus() // фокус на кнопку — для пульта/D-pad
+        settings.requestFocus() // фокус на шестерёнку — для пульта/D-pad
 
         // Показываем текущий статус брокера и слушаем изменения, пока экран открыт.
         updateStatus(MqttStatus.connected)
@@ -135,12 +150,14 @@ class MainActivity : Activity() {
         controllerFuture = future
     }
 
-    // Файл открыт, если у плеера есть текущий элемент: показываем видео, иначе — меню.
+    // Файл открыт → показываем видео; иначе — главный экран (логотип + шестерёнка + статус).
     private fun updateUi(controller: MediaController) {
         val fileOpen = controller.currentMediaItem != null
         playerView?.visibility = if (fileOpen) View.VISIBLE else View.GONE
         menuView?.visibility = if (fileOpen) View.GONE else View.VISIBLE
+        settingsButton?.visibility = if (fileOpen) View.GONE else View.VISIBLE
         statusText?.visibility = if (fileOpen) View.GONE else View.VISIBLE
+        if (!fileOpen) settingsButton?.requestFocus()
         // Если ошибка случилась до подключения к сессии — показать надпись сейчас.
         if (controller.playerError != null) errorText?.visibility = View.VISIBLE
     }
@@ -149,8 +166,8 @@ class MainActivity : Activity() {
         statusText?.text = if (connected) "Брокер: подключено" else "Брокер: нет связи"
     }
 
-    // Back при открытом фильме — закрыть по ДВОЙНОМУ нажатию (чтобы не сбросить прогресс
-    // случайно): первый Back — подсказка, второй в течение 3 с — закрыть и вернуться в меню.
+    // Back при открытом фильме — закрыть по ДВОЙНОМУ нажатию (чтобы случайно не сбросить
+    // прогресс): первый Back — подсказка, второй в течение 3 с — закрыть и вернуться в меню.
     // Из меню Back — обычный выход из приложения.
     override fun onBackPressed() {
         val c = controller
