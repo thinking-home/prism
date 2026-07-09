@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Лаунчер Prism: живёт в трее, точка входа — пункт «Отправить» проводника.
+         По контракту это ещё один координатор: читает настройки из appsettings.json,
+         следит за списком плееров по MQTT и публикует команду open. WinForms —
+         штатный минимальный способ сделать значок в трее. -->
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net10.0-windows</TargetFramework>
+        <UseWindowsForms>true</UseWindowsForms>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>Prism.Launcher</AssemblyName>
+        <RootNamespace>Prism.Launcher</RootNamespace>
+        <!-- Иконка exe: видна в пункте «Отправить» проводника, в свойствах файла
+             и в диспетчере задач. -->
+        <ApplicationIcon>app.ico</ApplicationIcon>
+        <!-- Публикуется одним framework-dependent exe: на целевой машине нужен
+             .NET Desktop Runtime 10 (см. README, «Требования»); exe — единицы МБ
+             вместо ~100. -->
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <SelfContained>false</SelfContained>
+        <PublishSingleFile>true</PublishSingleFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
+    </ItemGroup>
+
+    <!-- Конфиг лаунчера — рядом с exe, readonly (правка + перезапуск). -->
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <!-- Тот же значок встроен для трея (логическое имя фиксируем для
+         GetManifestResourceStream). -->
+    <ItemGroup>
+        <EmbeddedResource Include="app.ico">
+            <LogicalName>app.ico</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Prism.Common\Prism.Common.csproj" />
+    </ItemGroup>
+
+</Project>

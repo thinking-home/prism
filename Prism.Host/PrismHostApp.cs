@@ -281,17 +281,6 @@ public static class PrismHostApp
         return Math.Clamp(audio ?? 0, 0, count - 1);
     }
 
-    // Достаёт числовой порт из аргумента --port. Отдельно от ApplyCommandLine,
-    // потому что порт — настройка хостинга (Kestrel), а не плеера.
-    private static bool TryGetPort(string[] args, out int port)
-    {
-        port = 0;
-        for (var i = 0; i < args.Length - 1; i++)
-            if (args[i] == "--port" && int.TryParse(args[i + 1], out port) && port is > 0 and <= 65535)
-                return true;
-        return false;
-    }
-
     private static void ApplyCommandLine(string[] args, PlayerOptions options)
     {
         for (var i = 0; i < args.Length; i++)
