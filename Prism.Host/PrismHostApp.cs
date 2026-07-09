@@ -108,6 +108,20 @@ public static class PrismHostApp
             return Results.Json(dto);
         });
 
+        // ---- Резолв файла по отпечатку содержимого (для лаунчера) --------------
+        // Лаунчер считает отпечаток кликнутого файла (Prism.Core: размер + хеш
+        // краёв) и спрашивает, есть ли такой файл в библиотеке. Идентификация по
+        // содержимому, а не по пути, поэтому корректно и когда лаунчер на другой
+        // машине. Ответ — та же запись, что и в /api/media (клиент берёт streamUrl
+        // и playable); 404 — файла в библиотеке нет.
+        app.MapGet("/api/resolve", async (long size, string fingerprint, CancellationToken ct) =>
+        {
+            var item = library.FindByFingerprint(size, fingerprint);
+            if (item is null) return Results.NotFound();
+            await library.ResolveAsync(item, ct);
+            return Results.Json(MediaDto(item));
+        });
+
         // ---- HLS-плейлист (для выбранной аудиодорожки ?audio=N) ----------------
         app.MapGet("/hls/{id}/playlist.m3u8", async (string id, int? audio, CancellationToken ct) =>
         {
@@ -265,6 +279,17 @@ public static class PrismHostApp
         var count = info.AudioTracks.Count;
         if (count <= 0) return 0;
         return Math.Clamp(audio ?? 0, 0, count - 1);
+    }
+
+    // Достаёт числовой порт из аргумента --port. Отдельно от ApplyCommandLine,
+    // потому что порт — настройка хостинга (Kestrel), а не плеера.
+    private static bool TryGetPort(string[] args, out int port)
+    {
+        port = 0;
+        for (var i = 0; i < args.Length - 1; i++)
+            if (args[i] == "--port" && int.TryParse(args[i + 1], out port) && port is > 0 and <= 65535)
+                return true;
+        return false;
     }
 
     private static void ApplyCommandLine(string[] args, PlayerOptions options)

@@ -26,6 +26,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Prism.Abstractions\Prism.Abstractions.csproj" />
+        <ProjectReference Include="..\Prism.Common\Prism.Common.csproj" />
     </ItemGroup>
 
 </Project>

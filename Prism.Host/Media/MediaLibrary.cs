@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using Prism.Common;
 
 namespace Prism.Host.Media;
 
@@ -43,6 +44,8 @@ public sealed class MediaLibrary
     private readonly ILogger<MediaLibrary> _logger;
     private readonly ConcurrentDictionary<string, MediaItem> _byId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _resolveLocks = new();
+    // Кэш отпечатков по пути файла; переснимается, если файл изменился (размер/mtime).
+    private readonly ConcurrentDictionary<string, (long Size, long Mtime, string Hash)> _fingerprints = new();
 
     public string MediaDirectory { get; }
 
@@ -88,6 +91,49 @@ public sealed class MediaLibrary
     }
 
     public MediaItem? Get(string id) => _byId.TryGetValue(id, out var item) ? item : null;
+
+    /// <summary>
+    /// Находит файл библиотеки по отпечатку содержимого (см. <see cref="MediaFingerprint"/>).
+    /// Идентификация по содержимому, а не по пути: работает и когда запрос пришёл с
+    /// другой машины. Сначала мгновенный пред-фильтр по размеру (из <see cref="FileInfo"/>),
+    /// затем сверка хеша краёв — блоки читаются только у файлов совпавшего размера,
+    /// результат кэшируется. Возвращает <c>null</c>, если такого файла в библиотеке нет.
+    /// </summary>
+    public MediaItem? FindByFingerprint(long size, string hash)
+    {
+        if (string.IsNullOrWhiteSpace(hash)) return null;
+
+        foreach (var item in Scan())
+        {
+            FileInfo fi;
+            try
+            {
+                fi = new FileInfo(item.Path);
+                if (!fi.Exists || fi.Length != size) continue; // пред-фильтр по размеру
+            }
+            catch { continue; }
+
+            string fp;
+            try { fp = Fingerprint(item.Path, fi); }
+            catch { continue; } // файл занят/исчез — пропускаем, не роняем поиск
+
+            if (string.Equals(fp, hash, StringComparison.OrdinalIgnoreCase))
+                return item;
+        }
+
+        return null;
+    }
+
+    private string Fingerprint(string path, FileInfo fi)
+    {
+        var mtime = fi.LastWriteTimeUtc.Ticks;
+        if (_fingerprints.TryGetValue(path, out var cached) && cached.Size == fi.Length && cached.Mtime == mtime)
+            return cached.Hash;
+
+        var hash = MediaFingerprinter.Compute(path).Hash;
+        _fingerprints[path] = (fi.Length, mtime, hash);
+        return hash;
+    }
 
     /// <summary>
     /// Лениво анализирует файл и определяет режим воспроизведения. Операция общая и

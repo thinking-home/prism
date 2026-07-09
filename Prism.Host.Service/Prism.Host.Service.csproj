@@ -1,14 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
     <!-- Служба Windows (ставится инсталлятором Prism.Host.Setup). Публикуется
-         одним self-contained exe — .NET на целевой машине не нужен. -->
+         одним framework-dependent exe — на целевой машине нужен установленный
+         ASP.NET Core Runtime 10 (см. README, «Требования»); зато exe весит
+         единицы МБ вместо ~100. -->
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <InvariantGlobalization>true</InvariantGlobalization>
         <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-        <SelfContained>true</SelfContained>
+        <SelfContained>false</SelfContained>
         <PublishSingleFile>true</PublishSingleFile>
     </PropertyGroup>
 

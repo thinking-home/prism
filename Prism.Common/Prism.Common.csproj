@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Общая логика Prism без внешних зависимостей: подключается и в хост
+         (Prism.Host), и в лаунчер (Prism.Launcher), чтобы отпечаток файла
+         считался одинаково в обоих процессах. Кроссплатформенный net10.0 —
+         хост может работать не только на Windows. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+</Project>
