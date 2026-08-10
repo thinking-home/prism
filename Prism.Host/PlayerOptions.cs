@@ -6,8 +6,16 @@ namespace Prism.Host;
 /// </summary>
 public sealed class PlayerOptions
 {
-    /// <summary>Папка, которая сканируется на наличие медиафайлов для раздачи.</summary>
-    public string MediaDirectory { get; set; } = "videos";
+    /// <summary>
+    /// Папки, которые сканируются на наличие медиафайлов для раздачи. Пусто —
+    /// подставляется <see cref="DefaultMediaDirectory"/>. Значения по умолчанию тут
+    /// быть не должно: биндер конфигурации ДОПИСЫВАЕТ элементы к уже имеющимся,
+    /// поэтому дефолт просочился бы в список рядом с папками из appsettings.
+    /// </summary>
+    public string[] MediaDirectories { get; set; } = [];
+
+    /// <summary>Папка, которая используется, если ни конфиг, ни командная строка их не задали.</summary>
+    public const string DefaultMediaDirectory = "videos";
 
     /// <summary>Явный путь к бинарю ffmpeg. Пусто — автоопределение.</summary>
     public string? FfmpegPath { get; set; }

@@ -2,7 +2,7 @@
 
 Сетевой медиа-плеер из двух частей:
 
-- **Prism.Host** — сервер (ASP.NET Core). Сканирует папку с видеофайлами (например,
+- **Prism.Host** — сервер (ASP.NET Core). Сканирует одну или несколько папок с видеофайлами (например,
   двухчасовой `.mkv`) и отдаёт **только HTTP API**: данные библиотеки и потоковое
   видео. Если файл уже в браузерном формате — стримит напрямую; иначе, при наличии
   нужного кодека в системе, обрабатывает через **ffmpeg** и выдаёт **H264 или H265**
@@ -240,9 +240,14 @@ dotnet run --project Prism.Host.Console
 ```bash
 dotnet run --project Prism.Host.Console -- --file "/путь/к/movie.mkv"    # отдать папку с этим файлом
 dotnet run --project Prism.Host.Console -- --media "/путь/к/библиотеке"  # отдать папку
+dotnet run --project Prism.Host.Console -- --media "/кино" --media "/сериалы"  # несколько папок
 dotnet run --project Prism.Host.Console -- --codec h265                  # выдавать HEVC вместо H264
 dotnet run --project Prism.Host.Console -- --ffmpeg /opt/homebrew/bin/ffmpeg
 ```
+
+`--media` (и `--file`) можно указывать несколько раз; каждая папка **добавляется**
+к списку `MediaDirectories` из `appsettings.json`. Дубли и вложенные папки
+схлопываются автоматически.
 
 ### 2. Клиент — Prism.Client
 
@@ -300,9 +305,10 @@ msiexec /i PrismHostSetup.msi /qn MEDIAFOLDER=D:\Video /l*v install.log
 ```
 
 Остальная конфигурация установленного экземпляра — `C:\Program Files\Prism Host\appsettings.json`
-(после правки перезапустить службу: `sc stop PrismHost && sc start PrismHost`;
-папку с видео там менять бесполезно — аргумент `--media` из установки имеет
-приоритет).
+(после правки перезапустить службу: `sc stop PrismHost && sc start PrismHost`).
+Папка, выбранная в инсталляторе, приходит службе аргументом `--media` и
+**добавляется** к списку `MediaDirectories` из `appsettings.json` — дописав туда
+папки, можно раздавать несколько библиотек без переустановки.
 
 > Для сборки MSI ничего ставить не нужно (`dotnet build` сам тянет WiX из
 > NuGet), но чтобы `.wixproj` открывался в Visual Studio, нужно бесплатное
@@ -350,7 +356,7 @@ Android-плеер ([Prism.Player.Android](Prism.Player.Android/README.md)) уп
 
 | Ключ               | По умолчанию | Назначение |
 |--------------------|--------------|------------|
-| `MediaDirectory`   | `videos`     | папка, сканируемая на медиа (относительно приложения) |
+| `MediaDirectories` | `["videos"]` | **список** папок, сканируемых на медиа (относительные — от папки приложения) |
 | `FfmpegPath`       | *(авто)*     | явный путь к бинарю ffmpeg |
 | `FfprobePath`      | *(авто)*     | явный путь к бинарю ffprobe |
 | `OutputCodec`      | `h264`       | `h264` (libx264) или `h265` (libx265/HEVC) |

@@ -10,7 +10,7 @@ export interface ServerInfo {
   segmentSeconds: number;
   audioBitrateKbps: number;
   audioSampleRate: number;
-  mediaDirectory: string;
+  mediaDirectories: string[];
   mediaCount: number;
 }
 

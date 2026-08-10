@@ -24,19 +24,24 @@ public sealed class HostClient(string baseUrl)
     /// <summary>Абсолютный URL потока для приставки: базовый адрес хоста + относительный streamUrl.</summary>
     public string AbsoluteStreamUrl(string streamUrl) => $"{Base}{streamUrl}";
 
-    /// <summary>Папка, которую раздаёт хост (из /api/info) — для понятного сообщения. null, если хост недоступен.</summary>
-    public async Task<string?> GetMediaDirectoryAsync(CancellationToken ct = default)
+    /// <summary>Папки, которые раздаёт хост (из /api/info) — для понятного сообщения. Пусто, если хост недоступен.</summary>
+    public async Task<IReadOnlyList<string>> GetMediaDirectoriesAsync(CancellationToken ct = default)
     {
         try
         {
             using var resp = await Http.GetAsync($"{Base}/api/info", ct);
-            if (!resp.IsSuccessStatusCode) return null;
+            if (!resp.IsSuccessStatusCode) return [];
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-            return doc.RootElement.TryGetProperty("mediaDirectory", out var d) ? d.GetString() : null;
+            if (!doc.RootElement.TryGetProperty("mediaDirectories", out var dirs) || dirs.ValueKind != JsonValueKind.Array)
+                return [];
+            return dirs.EnumerateArray()
+                .Select(d => d.GetString())
+                .Where(d => !string.IsNullOrEmpty(d))
+                .ToArray()!;
         }
         catch
         {
-            return null;
+            return [];
         }
     }
 

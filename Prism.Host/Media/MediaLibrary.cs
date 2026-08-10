@@ -30,7 +30,7 @@ public sealed class MediaItem
 }
 
 /// <summary>
-/// Находит медиафайлы в заданной папке и определяет для каждого файла, можно ли
+/// Находит медиафайлы в заданных папках и определяет для каждого файла, можно ли
 /// воспроизвести его напрямую или требуется транскодирование через ffmpeg.
 /// </summary>
 public sealed class MediaLibrary
@@ -38,7 +38,6 @@ public sealed class MediaLibrary
     private static readonly string[] Extensions =
         [".mkv", ".mp4", ".mov", ".webm", ".avi", ".m4v", ".ts", ".flv", ".wmv", ".mpg", ".mpeg"];
 
-    private readonly PlayerOptions _options;
     private readonly MediaProbe _probe;
     private readonly FFTools _tools;
     private readonly ILogger<MediaLibrary> _logger;
@@ -47,44 +46,69 @@ public sealed class MediaLibrary
     // Кэш отпечатков по пути файла; переснимается, если файл изменился (размер/mtime).
     private readonly ConcurrentDictionary<string, (long Size, long Mtime, string Hash)> _fingerprints = new();
 
-    public string MediaDirectory { get; }
+    /// <summary>Корневые папки библиотеки (абсолютные пути, без дублей).</summary>
+    public IReadOnlyList<string> MediaDirectories { get; }
 
     public MediaLibrary(PlayerOptions options, MediaProbe probe, FFTools tools, ILogger<MediaLibrary> logger)
     {
-        _options = options;
         _probe = probe;
         _tools = tools;
         _logger = logger;
-        MediaDirectory = Path.GetFullPath(options.MediaDirectory);
-        Directory.CreateDirectory(MediaDirectory);
+
+        // Одна и та же папка, указанная дважды (в т.ч. с разным регистром/слешем на
+        // конце), — один корень; иначе её файлы сканировались бы по два раза.
+        MediaDirectories = options.MediaDirectories
+            .Where(d => !string.IsNullOrWhiteSpace(d))
+            .Select(d => Path.TrimEndingDirectorySeparator(Path.GetFullPath(d)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var dir in MediaDirectories)
+        {
+            // Папку из конфига создаём, если её нет (как раньше для единственной);
+            // недоступный путь не должен ронять запуск — просто останется пустым.
+            try { Directory.CreateDirectory(dir); }
+            catch (Exception ex) { _logger.LogError(ex, "Не удалось создать папку с медиа {dir}", dir); }
+        }
     }
 
-    /// <summary>Повторно сканирует папку с медиа и возвращает текущий каталог.</summary>
+    /// <summary>Повторно сканирует папки с медиа и возвращает текущий каталог.</summary>
     public IReadOnlyList<MediaItem> Scan()
     {
         var found = new List<MediaItem>();
-        IEnumerable<string> files;
-        try
-        {
-            files = Directory.EnumerateFiles(MediaDirectory, "*", SearchOption.AllDirectories)
-                .Where(f => Extensions.Contains(Path.GetExtension(f).ToLowerInvariant()));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось перечислить файлы в {dir}", MediaDirectory);
-            return [];
-        }
+        // Файл, попавший в область сразу двух корней (вложенные папки), должен
+        // остаться одной записью — id совпадёт, поэтому отсеиваем по нему.
+        var seen = new HashSet<string>();
 
-        foreach (var file in files.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+        foreach (var dir in MediaDirectories)
         {
-            var id = MakeId(file);
-            var item = _byId.GetOrAdd(id, _ => new MediaItem
+            IEnumerable<string> files;
+            try
             {
-                Id = id,
-                Path = file,
-                FileName = Path.GetFileName(file),
-            });
-            found.Add(item);
+                files = Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                    .Where(f => Extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                // Одна недоступная папка не должна лишать библиотеку остальных.
+                _logger.LogError(ex, "Не удалось перечислить файлы в {dir}", dir);
+                continue;
+            }
+
+            foreach (var file in files)
+            {
+                var id = MakeId(file);
+                if (!seen.Add(id)) continue;
+                var item = _byId.GetOrAdd(id, _ => new MediaItem
+                {
+                    Id = id,
+                    Path = file,
+                    FileName = Path.GetFileName(file),
+                });
+                found.Add(item);
+            }
         }
 
         return found;

@@ -92,10 +92,10 @@ public sealed class LauncherContext : ApplicationContext
 
         if (media is null)
         {
-            var dir = await host.GetMediaDirectoryAsync();
-            var hint = dir is null
+            var dirs = await host.GetMediaDirectoriesAsync();
+            var hint = dirs.Count == 0
                 ? "The Prism host does not serve this file."
-                : $"The file must be inside the media folder: {dir}";
+                : $"The file must be inside a media folder: {string.Join("; ", dirs)}";
             Notify("Not in the Prism library", hint, ToolTipIcon.Warning);
             return;
         }

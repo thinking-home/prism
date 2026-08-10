@@ -44,10 +44,14 @@ public static class PrismHostApp
         builder.Configuration.GetSection("Player").Bind(player);
         ApplyCommandLine(args, player);
 
-        // Относительную папку с медиа разрешаем относительно корня приложения, чтобы
+        if (player.MediaDirectories.Length == 0)
+            player.MediaDirectories = [PlayerOptions.DefaultMediaDirectory];
+
+        // Относительные папки с медиа разрешаем относительно корня приложения, чтобы
         // использовалась одна и та же папка "videos" независимо от рабочего каталога shell.
-        if (!Path.IsPathRooted(player.MediaDirectory))
-            player.MediaDirectory = Path.Combine(builder.Environment.ContentRootPath, player.MediaDirectory);
+        player.MediaDirectories = player.MediaDirectories
+            .Select(d => Path.IsPathRooted(d) ? d : Path.Combine(builder.Environment.ContentRootPath, d))
+            .ToArray();
 
         builder.Services.AddSingleton(player);
         builder.Services.AddSingleton<FFTools>();
@@ -94,7 +98,7 @@ public static class PrismHostApp
             segmentSeconds = player.SegmentSeconds,
             audioBitrateKbps = player.AudioBitrateKbps,
             audioSampleRate = player.AudioSampleRate,
-            mediaDirectory = library.MediaDirectory,
+            mediaDirectories = library.MediaDirectories,
             mediaCount = library.Scan().Count,
         }));
 
@@ -226,7 +230,7 @@ public static class PrismHostApp
 
         // ---- Стартовый баннер ---------------------------------------------------
         var initial = library.Scan();
-        app.Logger.LogInformation("Папка с медиа     : {dir}", library.MediaDirectory);
+        app.Logger.LogInformation("Папки с медиа     : {dirs}", string.Join("; ", library.MediaDirectories));
         app.Logger.LogInformation("Найдено файлов    : {count}", initial.Count);
         app.Logger.LogInformation("Выходной кодек    : {codec}", player.OutputCodec);
         app.Logger.LogInformation("ffmpeg доступен   : {avail}", tools.Available);
@@ -309,6 +313,10 @@ public static class PrismHostApp
 
     private static void ApplyCommandLine(string[] args, PlayerOptions options)
     {
+        // --media/--file можно указывать несколько раз; каждая папка ДОБАВЛЯЕТСЯ
+        // к списку из конфига (не заменяет его) — так у службы Windows работают
+        // одновременно --media от инсталлятора и папки, дописанные в appsettings.
+        var dirs = new List<string>();
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -317,10 +325,10 @@ public static class PrismHostApp
                     // Раздать папку, в которой лежит этот файл.
                     var file = args[++i];
                     var dir = Path.GetDirectoryName(Path.GetFullPath(file));
-                    if (!string.IsNullOrEmpty(dir)) options.MediaDirectory = dir;
+                    if (!string.IsNullOrEmpty(dir)) dirs.Add(dir);
                     break;
                 case "--media" or "--dir" when i + 1 < args.Length:
-                    options.MediaDirectory = args[++i];
+                    dirs.Add(args[++i]);
                     break;
                 case "--codec" when i + 1 < args.Length:
                     options.OutputCodec = args[++i];
@@ -333,5 +341,7 @@ public static class PrismHostApp
                     break;
             }
         }
+
+        if (dirs.Count > 0) options.MediaDirectories = [.. options.MediaDirectories, .. dirs];
     }
 }
