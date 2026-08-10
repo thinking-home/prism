@@ -21,6 +21,9 @@
         <RuntimeIdentifier>win-x64</RuntimeIdentifier>
         <SelfContained>false</SelfContained>
         <PublishSingleFile>true</PublishSingleFile>
+        <!-- Разрешить сборку Windows-таргета на macOS/Linux (compile-check;
+             запускается всё равно только на Windows). -->
+        <EnableWindowsTargeting>true</EnableWindowsTargeting>
     </PropertyGroup>
 
     <ItemGroup>

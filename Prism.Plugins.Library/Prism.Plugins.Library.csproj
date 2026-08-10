@@ -23,8 +23,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
         <PackageReference Include="ThinkingHome.Migrator" Version="3.10.0" />
         <PackageReference Include="ThinkingHome.Migrator.Framework" Version="3.10.0" />
         <PackageReference Include="ThinkingHome.Migrator.Providers.SQLite" Version="3.10.0" />
@@ -36,9 +36,7 @@
         <ItemGroup>
             <PluginOut Include="$(TargetDir)**\*" Exclude="$(TargetDir)Prism.Abstractions.dll" />
         </ItemGroup>
-        <Copy SourceFiles="@(PluginOut)"
-              DestinationFolder="$(MSBuildProjectDirectory)\..\Prism.Host.Console\plugins\Prism.Plugins.Library\%(RecursiveDir)"
-              SkipUnchangedFiles="true" />
+        <Copy SourceFiles="@(PluginOut)" DestinationFolder="$(MSBuildProjectDirectory)\..\Prism.Host.Console\plugins\Prism.Plugins.Library\%(RecursiveDir)" SkipUnchangedFiles="true" />
     </Target>
 
 </Project>

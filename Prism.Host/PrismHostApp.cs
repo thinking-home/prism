@@ -1,5 +1,6 @@
 using Prism.Abstractions;
 using Prism.Host.Media;
+using Serilog;
 
 namespace Prism.Host;
 
@@ -15,6 +16,24 @@ public static class PrismHostApp
         var args = options.Args ?? [];
         var builder = WebApplication.CreateBuilder(options);
         configure?.Invoke(builder);
+
+        // ---- Логи ------------------------------------------------------------
+        // Serilog: консоль (как раньше) + файлы с ротацией в logs/ рядом с
+        // приложением (у службы Windows content root — папка установки, поэтому
+        // путь абсолютный). Уровни — секция "Serilog" в appsettings.json.
+        // Логгер создаётся сразу (а не в колбэке UseSerilog), чтобы в файл попадали
+        // и сообщения этапа сборки приложения — например, загрузки плагинов.
+        Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(builder.Configuration)
+            .WriteTo.Console()
+            .WriteTo.File(
+                Path.Combine(builder.Environment.ContentRootPath, "logs", "prism-.log"),
+                rollingInterval: RollingInterval.Day,
+                fileSizeLimitBytes: 32 * 1024 * 1024,
+                rollOnFileSizeLimit: true,
+                retainedFileCountLimit: 14)
+            .CreateLogger();
+        builder.Host.UseSerilog();
 
         // ---- Конфигурация ----------------------------------------------------
         // Читаем настройки Player из appsettings.json (секция "Player"), затем
@@ -42,7 +61,7 @@ public static class PrismHostApp
         // Отдаём плагинам корень приложения (для разрешения относительных путей, напр. SQLite).
         builder.Configuration["ContentRoot"] = builder.Environment.ContentRootPath;
         var modules = PluginLoader.Load(builder.Configuration, builder.Environment.ContentRootPath,
-            LoggerFactory.Create(b => b.AddConsole()).CreateLogger("Plugins"));
+            LoggerFactory.Create(b => b.AddSerilog()).CreateLogger("Plugins"));
         foreach (var module in modules)
             module.ConfigureServices(builder.Services, builder.Configuration);
 
@@ -212,7 +231,14 @@ public static class PrismHostApp
         app.Logger.LogInformation("Выходной кодек    : {codec}", player.OutputCodec);
         app.Logger.LogInformation("ffmpeg доступен   : {avail}", tools.Available);
 
-        app.Run();
+        try
+        {
+            app.Run();
+        }
+        finally
+        {
+            Log.CloseAndFlush(); // дописать хвост файла при остановке
+        }
     }
 
     // --------------------------------------------------------------------------
