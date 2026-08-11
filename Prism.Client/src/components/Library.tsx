@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { api } from "../api";
 import type { MediaItem } from "../api";
 import { useServerUrl } from "../serverUrl";

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import { api, trackLabel } from "../api";
 import type { MediaItem } from "../api";
 import { useServerUrl } from "../serverUrl";

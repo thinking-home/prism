@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Route, Routes } from "react-router-dom";
+import { Link, Route, Routes } from "react-router";
 import { api } from "./api";
 import type { ServerInfo } from "./api";
 import { useServerUrl } from "./serverUrl";
