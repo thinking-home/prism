@@ -4,9 +4,11 @@ using Prism.Abstractions;
 namespace Prism.Plugins.Library;
 
 /// <summary>
-/// Отдаёт ядру доп. поля записи из хранилища метаданных: вычисленный <c>title</c>,
-/// <c>kind</c> и (для эпизода) сериал/сезон/эпизод. Синглтон + фабрика контекста,
-/// чтобы безопасно вызываться из корневого провайдера ядра.
+/// Подмешивает к записям <c>/api/media</c> свободную мету файла из Prism_Meta.
+/// Id файла — ключ содержимого, он же ключ меты, поэтому резолва не нужно.
+/// Семантику ключей сервер не знает — потребитель берёт те, о которых знает сам
+/// (например, <c>title</c>). Синглтон + фабрика контекста, чтобы безопасно
+/// вызываться из ядра.
 /// </summary>
 public sealed class MetadataMetaSource(IDbContextFactory<LibraryDbContext> factory) : IMediaMetaSource
 {
@@ -14,35 +16,20 @@ public sealed class MetadataMetaSource(IDbContextFactory<LibraryDbContext> facto
         IReadOnlyCollection<string> mediaIds, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        var rows = await db.Metadata.Where(x => mediaIds.Contains(x.MediaId)).ToListAsync(ct);
+        var rows = await db.Meta
+            .Where(m => m.EntityType == MetaEntity.File && mediaIds.Contains(m.EntityKey))
+            .ToListAsync(ct);
 
         var result = new Dictionary<string, IReadOnlyDictionary<string, object?>>();
-        foreach (var r in rows)
-        {
-            var fields = new Dictionary<string, object?>
-            {
-                ["kind"] = r.Kind,
-                ["seriesTitle"] = r.SeriesTitle,
-                ["season"] = r.Season,
-                ["episode"] = r.Episode,
-                ["hasMetadata"] = true,
-            };
-            // Название переопределяем только если оно есть — иначе оставляем имя файла.
-            var title = DisplayTitle(r);
-            if (title is not null) fields["title"] = title;
-            result[r.MediaId] = fields;
-        }
+        foreach (var group in rows.GroupBy(r => r.EntityKey))
+            result[group.Key] = group.ToDictionary(r => r.Key, object? (r) => r.Value);
         return result;
     }
+}
 
-    // Фильм → Title; эпизод → «Сериал · SxxExx».
-    internal static string? DisplayTitle(MediaMetadataRecord r)
-    {
-        if (r.Kind == "episode" && !string.IsNullOrWhiteSpace(r.SeriesTitle))
-        {
-            var code = r is { Season: int s, Episode: int e } ? $" · S{s:00}E{e:00}" : "";
-            return r.SeriesTitle + code;
-        }
-        return string.IsNullOrWhiteSpace(r.Title) ? null : r.Title;
-    }
+/// <summary>Значения EntityType в таблице меты.</summary>
+public static class MetaEntity
+{
+    public const string File = "file";
+    public const string Node = "node";
 }

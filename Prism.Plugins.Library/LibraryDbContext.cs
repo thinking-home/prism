@@ -9,14 +9,26 @@ namespace Prism.Plugins.Library;
 /// </summary>
 public class LibraryDbContext(DbContextOptions<LibraryDbContext> options) : DbContext(options)
 {
-    public DbSet<MediaMetadataRecord> Metadata => Set<MediaMetadataRecord>();
+    public DbSet<LibraryNode> Nodes => Set<LibraryNode>();
+    public DbSet<NodeItemRecord> NodeItems => Set<NodeItemRecord>();
+    public DbSet<MetaRecord> Meta => Set<MetaRecord>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
-        b.Entity<MediaMetadataRecord>(e =>
+        b.Entity<LibraryNode>(e =>
         {
-            e.ToTable("Prism_MediaMetadata");
-            e.HasKey(x => x.MediaId);
+            e.ToTable("Prism_Node");
+            e.HasKey(x => x.Id);
+        });
+        b.Entity<NodeItemRecord>(e =>
+        {
+            e.ToTable("Prism_NodeItem");
+            e.HasKey(x => new { x.NodeId, x.FileKey });
+        });
+        b.Entity<MetaRecord>(e =>
+        {
+            e.ToTable("Prism_Meta");
+            e.HasKey(x => new { x.EntityType, x.EntityKey, x.Key });
         });
     }
 }

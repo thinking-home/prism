@@ -57,6 +57,7 @@ public static class PrismHostApp
         builder.Services.AddSingleton<FFTools>();
         builder.Services.AddSingleton<MediaProbe>();
         builder.Services.AddSingleton<MediaLibrary>();
+        builder.Services.AddSingleton<IMediaIdentity, MediaIdentity>();
         builder.Services.AddSingleton<HlsTranscoder>();
         builder.Services.AddSingleton<SubtitleService>();
 
@@ -132,14 +133,14 @@ public static class PrismHostApp
         });
 
         // ---- Резолв файла по отпечатку содержимого (для лаунчера) --------------
-        // Лаунчер считает отпечаток кликнутого файла (Prism.Core: размер + хеш
-        // краёв) и спрашивает, есть ли такой файл в библиотеке. Идентификация по
-        // содержимому, а не по пути, поэтому корректно и когда лаунчер на другой
-        // машине. Ответ — та же запись, что и в /api/media (клиент берёт streamUrl
-        // и playable); 404 — файла в библиотеке нет.
+        // Лаунчер считает отпечаток кликнутого файла (Prism.Common: размер + хеш
+        // краёв) и спрашивает, есть ли такой файл в библиотеке. Id файла и есть
+        // отпечаток, поэтому резолв — прямой поиск по каталогу. Ответ — та же
+        // запись, что и в /api/media; 404 — файла в библиотеке нет.
         app.MapGet("/api/resolve", async (long size, string fingerprint, CancellationToken ct) =>
         {
-            var item = library.FindByFingerprint(size, fingerprint);
+            library.Scan();
+            var item = library.Get($"{size}-{fingerprint}");
             if (item is null) return Results.NotFound();
             await library.ResolveAsync(item, ct);
             return Results.Json(MediaDto(item));

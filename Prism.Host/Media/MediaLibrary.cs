@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
-using System.Text;
+using System.Text.Json;
 using Prism.Common;
 
 namespace Prism.Host.Media;
@@ -19,9 +18,14 @@ public enum PlaybackMode
 
 public sealed class MediaItem
 {
+    /// <summary>Ключ содержимого («размер-хеш краёв», см. <see cref="MediaFingerprint"/>) —
+    /// единственный идентификатор файла: не меняется при переименовании/переносе.</summary>
     public required string Id { get; init; }
-    public required string Path { get; init; }
-    public required string FileName { get; init; }
+
+    /// <summary>Текущий путь файла; обновляется при переезде содержимого.</summary>
+    public required string Path { get; set; }
+
+    public required string FileName { get; set; }
     public MediaInfo? Info { get; set; }
     public PlaybackMode Mode { get; set; }
     public string? StatusMessage { get; set; }
@@ -32,6 +36,9 @@ public sealed class MediaItem
 /// <summary>
 /// Находит медиафайлы в заданных папках и определяет для каждого файла, можно ли
 /// воспроизвести его напрямую или требуется транскодирование через ffmpeg.
+/// Идентификатор файла — отпечаток содержимого; отпечатки считаются при скане и
+/// кэшируются в data/fingerprints.json (по размеру/mtime), поэтому пересчёт
+/// происходит только для новых или изменившихся файлов.
 /// </summary>
 public sealed class MediaLibrary
 {
@@ -43,13 +50,24 @@ public sealed class MediaLibrary
     private readonly ILogger<MediaLibrary> _logger;
     private readonly ConcurrentDictionary<string, MediaItem> _byId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _resolveLocks = new();
-    // Кэш отпечатков по пути файла; переснимается, если файл изменился (размер/mtime).
-    private readonly ConcurrentDictionary<string, (long Size, long Mtime, string Hash)> _fingerprints = new();
+
+    // Персистентный кэш отпечатков: путь → (размер, mtime, хеш) + «последний
+    // известный путь» каждого id — по нему ремап находит, куда переехали записи
+    // библиотеки, когда содержимое по прежнему пути сменилось.
+    private readonly ConcurrentDictionary<string, CacheEntry> _fingerprints;
+    private readonly ConcurrentDictionary<string, string> _lastPath;
+    private readonly string _cachePath;
+    private readonly object _saveLock = new();
+    private volatile bool _dirty;
+
+    private sealed record CacheEntry(long Size, long Mtime, string Hash);
+    private sealed record CacheFile(Dictionary<string, CacheEntry> Files, Dictionary<string, string> LastPath);
 
     /// <summary>Корневые папки библиотеки (абсолютные пути, без дублей).</summary>
     public IReadOnlyList<string> MediaDirectories { get; }
 
-    public MediaLibrary(PlayerOptions options, MediaProbe probe, FFTools tools, ILogger<MediaLibrary> logger)
+    public MediaLibrary(PlayerOptions options, MediaProbe probe, FFTools tools,
+        IHostEnvironment env, ILogger<MediaLibrary> logger)
     {
         _probe = probe;
         _tools = tools;
@@ -70,14 +88,16 @@ public sealed class MediaLibrary
             try { Directory.CreateDirectory(dir); }
             catch (Exception ex) { _logger.LogError(ex, "Не удалось создать папку с медиа {dir}", dir); }
         }
+
+        _cachePath = Path.Combine(env.ContentRootPath, "data", "fingerprints.json");
+        (_fingerprints, _lastPath) = LoadCache();
     }
 
     /// <summary>Повторно сканирует папки с медиа и возвращает текущий каталог.</summary>
     public IReadOnlyList<MediaItem> Scan()
     {
         var found = new List<MediaItem>();
-        // Файл, попавший в область сразу двух корней (вложенные папки), должен
-        // остаться одной записью — id совпадёт, поэтому отсеиваем по нему.
+        // Один и тот же контент (копия файла, вложенные корни) — одна запись.
         var seen = new HashSet<string>();
 
         foreach (var dir in MediaDirectories)
@@ -99,64 +119,109 @@ public sealed class MediaLibrary
 
             foreach (var file in files)
             {
-                var id = MakeId(file);
+                var id = TryComputeId(file);
+                if (id is null) continue; // нечитаемый/исчезающий файл — пропускаем
                 if (!seen.Add(id)) continue;
+
                 var item = _byId.GetOrAdd(id, _ => new MediaItem
                 {
                     Id = id,
                     Path = file,
                     FileName = Path.GetFileName(file),
                 });
+                if (item.Path != file)
+                {
+                    // Содержимое переехало (или первой нашлась другая копия) —
+                    // id прежний, путь актуализируем.
+                    item.Path = file;
+                    item.FileName = Path.GetFileName(file);
+                }
                 found.Add(item);
             }
         }
 
+        SaveCacheIfDirty();
         return found;
     }
 
     public MediaItem? Get(string id) => _byId.TryGetValue(id, out var item) ? item : null;
 
     /// <summary>
-    /// Находит файл библиотеки по отпечатку содержимого (см. <see cref="MediaFingerprint"/>).
-    /// Идентификация по содержимому, а не по пути: работает и когда запрос пришёл с
-    /// другой машины. Сначала мгновенный пред-фильтр по размеру (из <see cref="FileInfo"/>),
-    /// затем сверка хеша краёв — блоки читаются только у файлов совпавшего размера,
-    /// результат кэшируется. Возвращает <c>null</c>, если такого файла в библиотеке нет.
+    /// Куда «переехало» содержимое: текущий id файла по последнему известному пути
+    /// <paramref name="missingId"/>, если там теперь другое содержимое (докачка/
+    /// перезапись). null — путь неизвестен, файла нет или содержимое прежнее.
     /// </summary>
-    public MediaItem? FindByFingerprint(long size, string hash)
+    public string? FindSuccessor(string missingId)
     {
-        if (string.IsNullOrWhiteSpace(hash)) return null;
-
-        foreach (var item in Scan())
-        {
-            FileInfo fi;
-            try
-            {
-                fi = new FileInfo(item.Path);
-                if (!fi.Exists || fi.Length != size) continue; // пред-фильтр по размеру
-            }
-            catch { continue; }
-
-            string fp;
-            try { fp = Fingerprint(item.Path, fi); }
-            catch { continue; } // файл занят/исчез — пропускаем, не роняем поиск
-
-            if (string.Equals(fp, hash, StringComparison.OrdinalIgnoreCase))
-                return item;
-        }
-
-        return null;
+        if (!_lastPath.TryGetValue(missingId, out var path)) return null;
+        var current = TryComputeId(path);
+        SaveCacheIfDirty();
+        return current is not null && current != missingId ? current : null;
     }
 
-    private string Fingerprint(string path, FileInfo fi)
+    // Id файла с кэшированием по (путь, размер, mtime). null — файл исчез/нечитаем.
+    private string? TryComputeId(string path)
     {
-        var mtime = fi.LastWriteTimeUtc.Ticks;
-        if (_fingerprints.TryGetValue(path, out var cached) && cached.Size == fi.Length && cached.Mtime == mtime)
-            return cached.Hash;
+        try
+        {
+            var fi = new FileInfo(path);
+            if (!fi.Exists) return null;
 
-        var hash = MediaFingerprinter.Compute(path).Hash;
-        _fingerprints[path] = (fi.Length, mtime, hash);
-        return hash;
+            var mtime = fi.LastWriteTimeUtc.Ticks;
+            if (_fingerprints.TryGetValue(path, out var cached) && cached.Size == fi.Length && cached.Mtime == mtime)
+                return $"{cached.Size}-{cached.Hash}";
+
+            var hash = MediaFingerprinter.Compute(path).Hash;
+            _fingerprints[path] = new CacheEntry(fi.Length, mtime, hash);
+            var id = $"{fi.Length}-{hash}";
+            _lastPath[id] = path;
+            _dirty = true;
+            return id;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Не удалось посчитать отпечаток {path}", path);
+            return null;
+        }
+    }
+
+    private (ConcurrentDictionary<string, CacheEntry>, ConcurrentDictionary<string, string>) LoadCache()
+    {
+        try
+        {
+            if (File.Exists(_cachePath))
+            {
+                var cache = JsonSerializer.Deserialize<CacheFile>(File.ReadAllText(_cachePath));
+                if (cache is not null)
+                    return (new(cache.Files), new(cache.LastPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Кэш отпечатков повреждён — будет пересоздан");
+        }
+        return (new(), new());
+    }
+
+    private void SaveCacheIfDirty()
+    {
+        if (!_dirty) return;
+        lock (_saveLock)
+        {
+            if (!_dirty) return;
+            _dirty = false;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_cachePath)!);
+                var payload = JsonSerializer.Serialize(new CacheFile(new(_fingerprints), new(_lastPath)));
+                File.WriteAllText(_cachePath + ".tmp", payload);
+                File.Move(_cachePath + ".tmp", _cachePath, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Не удалось сохранить кэш отпечатков");
+            }
+        }
     }
 
     /// <summary>
@@ -246,11 +311,5 @@ public sealed class MediaLibrary
         }
 
         item.Info = info; // публикуем последним
-    }
-
-    private static string MakeId(string path)
-    {
-        var hash = SHA1.HashData(Encoding.UTF8.GetBytes(path));
-        return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
     }
 }
