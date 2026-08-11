@@ -6,18 +6,21 @@ using System.Text;
 namespace Prism.Host.Media;
 
 /// <summary>
-/// Реализует VOD HLS «на лету». Плейлист рассчитывается заранее по длительности
-/// файла (чтобы браузер мог перематывать в любую точку). Сегменты производят
-/// сессии — каждый процесс ffmpeg своим HLS-муксером выдаёт ограниченный по времени
-/// диапазон сегментов (см. <see cref="PlayerOptions.SessionMinutes"/>) и завершается.
-/// Внутри сессии звук бесшовный; разрыв возможен лишь на границе сессий или при
-/// перемотке. Старые сессии вытесняются по LRU.
+/// Реализует VOD HLS «на лету» с master-плейлистом: видео и каждая аудиодорожка —
+/// отдельные сегментные потоки (рендиции), поэтому плеер переключает дорожки
+/// локально, а смена аудио не перекодирует видео. Плейлисты рассчитываются заранее
+/// по длительности файла (браузер может перематывать в любую точку). Сегменты
+/// производят сессии — каждый процесс ffmpeg своим HLS-муксером выдаёт ограниченный
+/// по времени диапазон сегментов одного потока (см.
+/// <see cref="PlayerOptions.SessionMinutes"/>) и завершается. Внутри сессии поток
+/// бесшовный; разрыв возможен лишь на границе сессий или при перемотке. Старые
+/// сессии вытесняются по LRU.
 /// </summary>
 public sealed class HlsTranscoder : IAsyncDisposable
 {
-    // Сколько сессий на файл держать одновременно. Нужно ≥2, чтобы на стыке сессий
-    // (или при буферизации плеера вперёд) «хвост» предыдущей сессии оставался
-    // доступен, пока подхватывается следующая.
+    // Сколько сессий КАЖДОГО вида (видео / аудио) держать на файл одновременно.
+    // Нужно ≥2, чтобы на стыке сессий (или при буферизации плеера вперёд) «хвост»
+    // предыдущей сессии оставался доступен, пока подхватывается следующая.
     private const int MaxSessionsPerMedia = 3;
 
     // Если запрошенный сегмент ещё не готов, но сессия его покрывает и фронт
@@ -64,8 +67,80 @@ public sealed class HlsTranscoder : IAsyncDisposable
     public int SegmentCount(MediaInfo info) =>
         Math.Max(1, (int)Math.Ceiling(info.DurationSeconds / SegmentLength));
 
-    /// <summary>Строит статический VOD-плейлист m3u8 для заданного файла и аудиодорожки.</summary>
-    public string BuildPlaylist(MediaInfo info, int audio)
+    /// <summary>
+    /// Строит master-плейлист: вариант видео + рендиции аудио (#EXT-X-MEDIA:TYPE=AUDIO)
+    /// и текстовых субтитров (TYPE=SUBTITLES). Из него плееры (hls.js, ExoPlayer,
+    /// Safari) узнают о дорожках и переключают их локально, без пересборки потока.
+    /// </summary>
+    public string BuildMasterPlaylist(MediaInfo info)
+    {
+        var sb = new StringBuilder();
+        sb.Append("#EXTM3U\n");
+        sb.Append("#EXT-X-VERSION:4\n");
+
+        var hasAudio = info.HasAudio && info.AudioTracks.Count > 0;
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; hasAudio && i < info.AudioTracks.Count; i++)
+        {
+            var t = info.AudioTracks[i];
+            sb.Append("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\"");
+            sb.Append($",NAME=\"{RenditionName(t.Title, t.Language, "Audio", i, names)}\"");
+            if (!string.IsNullOrWhiteSpace(t.Language)) sb.Append($",LANGUAGE=\"{t.Language.Replace('"', '\'')}\"");
+            sb.Append(i == 0 ? ",DEFAULT=YES,AUTOSELECT=YES" : ",DEFAULT=NO,AUTOSELECT=YES");
+            sb.Append(CultureInfo.InvariantCulture, $",URI=\"audio/{t.Index}.m3u8\"\n");
+        }
+
+        var textSubs = info.SubtitleTracks.Where(s => s.TextBased).ToArray();
+        var subNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < textSubs.Length; i++)
+        {
+            var t = textSubs[i];
+            sb.Append("#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\"");
+            sb.Append($",NAME=\"{RenditionName(t.Title, t.Language, "Subtitles", i, subNames)}\"");
+            if (!string.IsNullOrWhiteSpace(t.Language)) sb.Append($",LANGUAGE=\"{t.Language.Replace('"', '\'')}\"");
+            sb.Append(",DEFAULT=NO,AUTOSELECT=NO");
+            sb.Append(CultureInfo.InvariantCulture, $",URI=\"subs/{t.Index}.m3u8\"\n");
+        }
+
+        sb.Append(CultureInfo.InvariantCulture, $"#EXT-X-STREAM-INF:BANDWIDTH={EstimateBandwidth(info)}");
+        if (info.Width > 0 && info.Height > 0)
+            sb.Append(CultureInfo.InvariantCulture, $",RESOLUTION={info.Width}x{info.Height}");
+        sb.Append($",CODECS=\"{CodecsAttribute(hasAudio)}\"");
+        if (hasAudio) sb.Append(",AUDIO=\"audio\"");
+        if (textSubs.Length > 0) sb.Append(",SUBTITLES=\"subs\"");
+        sb.Append("\nvideo.m3u8\n");
+        return sb.ToString();
+    }
+
+    /// <summary>Строит статический VOD-плейлист видеодорожки (сегменты segment/N.ts).</summary>
+    public string BuildVideoPlaylist(MediaInfo info) =>
+        BuildMediaPlaylist(info, i => $"segment/{i}.ts");
+
+    /// <summary>Строит статический VOD-плейлист аудиодорожки (URI относительно /hls/{id}/audio/).</summary>
+    public string BuildAudioPlaylist(MediaInfo info, int track) =>
+        BuildMediaPlaylist(info, i => $"{track}/{i}.ts");
+
+    /// <summary>
+    /// Плейлист-обёртка дорожки субтитров: один WebVTT-«сегмент» на весь фильм,
+    /// ссылающийся на готовый /api/media/{id}/subtitle/N.vtt (путь от корня, чтобы
+    /// не зависеть от вложенности URL самого плейлиста).
+    /// </summary>
+    public string BuildSubtitlePlaylist(MediaInfo info, string mediaId, int track)
+    {
+        var dur = Math.Max(1.0, info.DurationSeconds);
+        var sb = new StringBuilder();
+        sb.Append("#EXTM3U\n");
+        sb.Append("#EXT-X-VERSION:4\n");
+        sb.Append(CultureInfo.InvariantCulture, $"#EXT-X-TARGETDURATION:{(int)Math.Ceiling(dur)}\n");
+        sb.Append("#EXT-X-MEDIA-SEQUENCE:0\n");
+        sb.Append("#EXT-X-PLAYLIST-TYPE:VOD\n");
+        sb.Append(CultureInfo.InvariantCulture, $"#EXTINF:{dur.ToString("0.000", CultureInfo.InvariantCulture)},\n");
+        sb.Append(CultureInfo.InvariantCulture, $"/api/media/{mediaId}/subtitle/{track}.vtt\n");
+        sb.Append("#EXT-X-ENDLIST\n");
+        return sb.ToString();
+    }
+
+    private string BuildMediaPlaylist(MediaInfo info, Func<int, string> segmentUri)
     {
         var seg = SegmentLength;
         var total = info.DurationSeconds;
@@ -84,18 +159,63 @@ public sealed class HlsTranscoder : IAsyncDisposable
             var len = Math.Min(seg, total - start);
             if (len <= 0) len = seg;
             sb.Append(CultureInfo.InvariantCulture, $"#EXTINF:{len.ToString("0.000", CultureInfo.InvariantCulture)},\n");
-            sb.Append(CultureInfo.InvariantCulture, $"segment/{i}.ts?audio={audio}\n");
+            sb.Append(segmentUri(i)).Append('\n');
         }
 
         sb.Append("#EXT-X-ENDLIST\n");
         return sb.ToString();
     }
 
+    // Имя рендиции для меню плеера: Title → Language → «Audio N»; уникально в
+    // группе (одинаковые имена плееры сливают в один пункт), кавычки — в апострофы.
+    private static string RenditionName(string? title, string? language, string fallback, int ordinal, HashSet<string> used)
+    {
+        var name = !string.IsNullOrWhiteSpace(title) ? title
+            : !string.IsNullOrWhiteSpace(language) ? language
+            : $"{fallback} {ordinal + 1}";
+        name = name.Replace('"', '\'');
+        if (!used.Add(name))
+        {
+            var n = 2;
+            string candidate;
+            do { candidate = $"{name} ({n++})"; } while (!used.Add(candidate));
+            name = candidate;
+        }
+        return name;
+    }
+
+    // Строка CODECS для STREAM-INF: должна соответствовать VideoEncoderArgs
+    // (H.264 High 4.1 / HEVC Main) и AAC-LC на выходе аудиосессий.
+    private string CodecsAttribute(bool hasAudio)
+    {
+        var video = _options.OutputCodec.ToLowerInvariant() is "h265" or "hevc"
+            ? "hvc1.1.6.L123.B0"
+            : "avc1.640029";
+        return hasAudio ? video + ",mp4a.40.2" : video;
+    }
+
+    // Грубая оценка пиковой полосы. Вариант в master один, так что на выбор плеера
+    // атрибут не влияет, но BANDWIDTH обязателен по спецификации.
+    private long EstimateBandwidth(MediaInfo info)
+    {
+        var pixels = info.Width > 0 && info.Height > 0 ? (long)info.Width * info.Height : 1920L * 1080;
+        return Math.Max(2_000_000, pixels * 4) + _options.AudioBitrateKbps * 1000L;
+    }
+
+    /// <summary>Отдаёт видеосегмент <paramref name="index"/> (сессия только-видео).</summary>
+    public Task WriteVideoSegmentAsync(MediaItem item, int index, Stream destination, CancellationToken ct) =>
+        WriteSegmentAsync(item, index, null, destination, ct);
+
+    /// <summary>Отдаёт аудиосегмент <paramref name="index"/> дорожки <paramref name="audio"/>.</summary>
+    public Task WriteAudioSegmentAsync(MediaItem item, int index, int audio, Stream destination, CancellationToken ct) =>
+        WriteSegmentAsync(item, index, audio, destination, ct);
+
     /// <summary>
-    /// Отдаёт сегмент <paramref name="index"/>: при необходимости поднимает сессию,
-    /// дожидается готовности файла сегмента и копирует его в <paramref name="destination"/>.
+    /// Отдаёт сегмент <paramref name="index"/> потока (<paramref name="audio"/>: null —
+    /// видео, иначе номер аудиодорожки): при необходимости поднимает сессию, дожидается
+    /// готовности файла сегмента и копирует его в <paramref name="destination"/>.
     /// </summary>
-    public async Task WriteSegmentAsync(MediaItem item, int index, int audio, Stream destination, CancellationToken ct)
+    private async Task WriteSegmentAsync(MediaItem item, int index, int? audio, Stream destination, CancellationToken ct)
     {
         if (_tools.FfmpegPath is null)
             throw new InvalidOperationException("ffmpeg недоступен.");
@@ -122,11 +242,15 @@ public sealed class HlsTranscoder : IAsyncDisposable
         throw new InvalidOperationException($"Не удалось получить сегмент {index} (ffmpeg не выдал файл).");
     }
 
+    /// <summary>Ключ потока сессии: "v" — видео, "aN" — аудиодорожка N.</summary>
+    private static string StreamKey(int? audio) => audio is null ? "v" : $"a{audio}";
+
     /// <summary>
     /// Находит сессию, которая выдаст сегмент <paramref name="index"/>, или создаёт её.
     /// </summary>
-    private async Task<TranscodeSession> AcquireSegmentAsync(MediaItem item, int index, int audio, CancellationToken ct)
+    private async Task<TranscodeSession> AcquireSegmentAsync(MediaItem item, int index, int? audio, CancellationToken ct)
     {
+        var stream = StreamKey(audio);
         var sem = _locks.GetOrAdd(item.Id, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct);
         try
@@ -140,18 +264,18 @@ public sealed class HlsTranscoder : IAsyncDisposable
             TranscodeSession? pick = null;
             foreach (var s in list)
             {
-                if (s.AudioTrack != audio || !s.Covers(index)) continue;      // другая дорожка/диапазон
+                if (s.Stream != stream || !s.Covers(index)) continue;         // другой поток/диапазон
                 if (s.SegmentReady(index)) { pick = s; break; }               // уже готов
                 if (!s.HasExited && index <= s.HighestProduced() + LookaheadGap) pick = s; // скоро будет
             }
 
             if (pick is null)
             {
-                var audioEncoder = await _audioEncoder.Value;
+                var audioEncoder = audio is null ? "" : await _audioEncoder.Value;
                 pick = StartSession(item, index, audio, audioEncoder);
                 list.Add(pick);
-                _logger.LogDebug("Запущена сессия транскодирования {file}: сегменты [{from}..{to}) audio={audio}",
-                    item.FileName, pick.StartIndex, pick.EndIndex, audio);
+                _logger.LogDebug("Запущена сессия {stream} {file}: сегменты [{from}..{to})",
+                    stream, item.FileName, pick.StartIndex, pick.EndIndex);
             }
 
             // Помечаем сессию самой свежей ДО вытеснения — иначе только что созданную
@@ -167,14 +291,28 @@ public sealed class HlsTranscoder : IAsyncDisposable
         }
     }
 
+    // Видео- и аудиосессии вытесняются раздельно (лимит на каждый вид): плеер тянет
+    // оба потока параллельно, и тяжёлая видеосессия не должна выбивать дешёвую
+    // аудиосессию той же позиции (и наоборот).
     private void EvictExtraSessions(List<TranscodeSession> list)
     {
-        while (list.Count > MaxSessionsPerMedia)
+        EvictExtraSessions(list, video: true);
+        EvictExtraSessions(list, video: false);
+    }
+
+    private void EvictExtraSessions(List<TranscodeSession> list, bool video)
+    {
+        while (true)
         {
-            // Вытесняем самую давно не используемую сессию.
-            var lru = list[0];
+            TranscodeSession? lru = null;
+            var count = 0;
             foreach (var s in list)
-                if (s.LastTouch < lru.LastTouch) lru = s;
+            {
+                if ((s.Stream == "v") != video) continue;
+                count++;
+                if (lru is null || s.LastTouch < lru.LastTouch) lru = s;
+            }
+            if (count <= MaxSessionsPerMedia || lru is null) return;
             list.Remove(lru);
             _ = lru.DisposeAsync().AsTask(); // не держим лок на время kill/cleanup
         }
@@ -197,13 +335,14 @@ public sealed class HlsTranscoder : IAsyncDisposable
         return File.Exists(path);
     }
 
-    private TranscodeSession StartSession(MediaItem item, int startIndex, int audio, string audioEncoder)
+    private TranscodeSession StartSession(MediaItem item, int startIndex, int? audio, string audioEncoder)
     {
         var info = item.Info!;
         var total = SegmentCount(info);
         var endIndex = Math.Min(startIndex + SessionSegments, Math.Max(startIndex + 1, total));
+        var stream = StreamKey(audio);
 
-        var dir = Path.Combine(_tempRoot, $"{item.Id}-{startIndex}-{Guid.NewGuid():N}");
+        var dir = Path.Combine(_tempRoot, $"{item.Id}-{stream}-{startIndex}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
 
         var start = startIndex * SegmentLength;
@@ -238,22 +377,30 @@ public sealed class HlsTranscoder : IAsyncDisposable
         a.Add("-t"); a.Add(duration.ToString("0.000", CultureInfo.InvariantCulture));
         a.Add("-i"); a.Add(item.Path);
 
-        a.Add("-map"); a.Add("0:v:0");
-        // Выбранная аудиодорожка (индекс среди аудиопотоков); ? — не падать, если её нет.
-        var audioTrack = audio >= 0 && audio < info.AudioTracks.Count ? info.AudioTracks[audio] : null;
-        if (info.HasAudio) { a.Add("-map"); a.Add($"0:a:{Math.Max(0, audio)}?"); }
-
-        // Видео в целевой кодек H264/H265 с ключевыми кадрами ровно на сетке сегментов.
-        var (vcodec, extra) = VideoEncoderArgs();
-        a.Add("-c:v"); a.Add(vcodec);
-        foreach (var e in extra) a.Add(e);
-        a.Add("-preset"); a.Add(_options.EncoderPreset);
-        a.Add("-crf"); a.Add(_options.Crf.ToString(CultureInfo.InvariantCulture));
-        a.Add("-pix_fmt"); a.Add("yuv420p");
-        a.Add("-force_key_frames");
-        a.Add($"expr:gte(t,n_forced*{SegmentLength.ToString("0.###", CultureInfo.InvariantCulture)})");
-
-        AddAudioArgs(a, info.HasAudio, audioTrack?.Channels ?? info.AudioChannels, audioEncoder);
+        if (audio is null)
+        {
+            // Только видео в целевой кодек H264/H265, ключевые кадры ровно на сетке
+            // сегментов. Аудио не мапится вовсе — оно едет отдельными рендициями.
+            a.Add("-map"); a.Add("0:v:0");
+            var (vcodec, extra) = VideoEncoderArgs();
+            a.Add("-c:v"); a.Add(vcodec);
+            foreach (var e in extra) a.Add(e);
+            a.Add("-preset"); a.Add(_options.EncoderPreset);
+            a.Add("-crf"); a.Add(_options.Crf.ToString(CultureInfo.InvariantCulture));
+            a.Add("-pix_fmt"); a.Add("yuv420p");
+            a.Add("-force_key_frames");
+            a.Add($"expr:gte(t,n_forced*{SegmentLength.ToString("0.###", CultureInfo.InvariantCulture)})");
+        }
+        else
+        {
+            // Только аудио выбранной дорожки в AAC: видео не кодируется вовсе,
+            // такая сессия почти бесплатна по CPU. Границы сегментов у аудио режутся
+            // муксером по кадрам AAC (~6 с, не тик-в-тик с видео) — плееры сводят
+            // потоки по таймстемпам, точного совпадения не требуется.
+            a.Add("-map"); a.Add($"0:a:{audio.Value}");
+            var track = audio.Value < info.AudioTracks.Count ? info.AudioTracks[audio.Value] : null;
+            AddAudioArgs(a, hasAudio: true, track?.Channels ?? info.AudioChannels, audioEncoder);
+        }
 
         // Глобальные таймстемпы: смещаем выход на позицию сессии, чтобы сегменты всех
         // сессий ложились на единую шкалу времени. muxdelay/muxpreload=0 убирают
@@ -276,14 +423,14 @@ public sealed class HlsTranscoder : IAsyncDisposable
         proc.ErrorDataReceived += (_, e) =>
         {
             if (!string.IsNullOrWhiteSpace(e.Data))
-                _logger.LogDebug("ffmpeg[{id}@{idx}]: {line}", item.Id, startIndex, e.Data);
+                _logger.LogDebug("ffmpeg[{id}/{stream}@{idx}]: {line}", item.Id, stream, startIndex, e.Data);
         };
 
         if (!proc.Start())
             throw new InvalidOperationException("Не удалось запустить ffmpeg.");
         proc.BeginErrorReadLine();
 
-        return new TranscodeSession(startIndex, endIndex, audio, dir, proc);
+        return new TranscodeSession(startIndex, endIndex, stream, dir, proc);
     }
 
     private void AddAudioArgs(System.Collections.ObjectModel.Collection<string> a, bool hasAudio, int channels, string audioEncoder)
@@ -374,8 +521,8 @@ public sealed class HlsTranscoder : IAsyncDisposable
                     {
                         list.Remove(s);
                         _ = s.DisposeAsync().AsTask();
-                        _logger.LogDebug("Убрана простаивающая сессия [{from}..{to}) audio={a}",
-                            s.StartIndex, s.EndIndex, s.AudioTrack);
+                        _logger.LogDebug("Убрана простаивающая сессия {stream} [{from}..{to})",
+                            s.Stream, s.StartIndex, s.EndIndex);
                     }
                 }
                 finally { sem.Release(); }
@@ -397,7 +544,7 @@ public sealed class HlsTranscoder : IAsyncDisposable
                     mediaId = id,
                     startIndex = s.StartIndex,
                     endIndex = s.EndIndex,
-                    audioTrack = s.AudioTrack,
+                    stream = s.Stream,
                     produced = Math.Max(0, s.HighestProduced() - s.StartIndex + 1),
                     total = s.EndIndex - s.StartIndex,
                     alive = !s.HasExited,

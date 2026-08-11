@@ -145,8 +145,8 @@ public static class PrismHostApp
             return Results.Json(MediaDto(item));
         });
 
-        // ---- HLS-плейлист (для выбранной аудиодорожки ?audio=N) ----------------
-        app.MapGet("/hls/{id}/playlist.m3u8", async (string id, int? audio, CancellationToken ct) =>
+        // ---- HLS: master-плейлист (вариант видео + рендиции аудио/субтитров) ---
+        app.MapGet("/hls/{id}/playlist.m3u8", async (string id, CancellationToken ct) =>
         {
             library.Scan();
             var item = library.Get(id);
@@ -155,12 +155,54 @@ public static class PrismHostApp
             if (item.Mode != PlaybackMode.Transcode || item.Info is null)
                 return Results.BadRequest("Этот файл не раздаётся через HLS.");
 
-            var playlist = transcoder.BuildPlaylist(item.Info, ClampAudio(item.Info, audio));
-            return Results.Text(playlist, "application/vnd.apple.mpegurl");
+            return Results.Text(transcoder.BuildMasterPlaylist(item.Info), "application/vnd.apple.mpegurl");
         });
 
-        // ---- HLS-сегмент (транскодирование на лету) ----------------------------
-        app.MapGet("/hls/{id}/segment/{index:int}.ts", async (string id, int index, int? audio, HttpContext http, CancellationToken ct) =>
+        // ---- HLS: медиа-плейлист видео ------------------------------------------
+        app.MapGet("/hls/{id}/video.m3u8", async (string id, CancellationToken ct) =>
+        {
+            library.Scan();
+            var item = library.Get(id);
+            if (item is null) return Results.NotFound();
+            await library.ResolveAsync(item, ct);
+            if (item.Mode != PlaybackMode.Transcode || item.Info is null)
+                return Results.BadRequest("Этот файл не раздаётся через HLS.");
+
+            return Results.Text(transcoder.BuildVideoPlaylist(item.Info), "application/vnd.apple.mpegurl");
+        });
+
+        // ---- HLS: медиа-плейлист аудиодорожки -----------------------------------
+        app.MapGet("/hls/{id}/audio/{track:int}.m3u8", async (string id, int track, CancellationToken ct) =>
+        {
+            library.Scan();
+            var item = library.Get(id);
+            if (item is null) return Results.NotFound();
+            await library.ResolveAsync(item, ct);
+            if (item.Mode != PlaybackMode.Transcode || item.Info is null)
+                return Results.BadRequest("Этот файл не раздаётся через HLS.");
+            if (track < 0 || track >= item.Info.AudioTracks.Count) return Results.NotFound();
+
+            return Results.Text(transcoder.BuildAudioPlaylist(item.Info, track), "application/vnd.apple.mpegurl");
+        });
+
+        // ---- HLS: плейлист дорожки субтитров (обёртка над WebVTT) ---------------
+        app.MapGet("/hls/{id}/subs/{track:int}.m3u8", async (string id, int track, CancellationToken ct) =>
+        {
+            library.Scan();
+            var item = library.Get(id);
+            if (item is null) return Results.NotFound();
+            await library.ResolveAsync(item, ct);
+            if (item.Mode != PlaybackMode.Transcode || item.Info is null)
+                return Results.BadRequest("Этот файл не раздаётся через HLS.");
+            if (track < 0 || track >= item.Info.SubtitleTracks.Count ||
+                !item.Info.SubtitleTracks[track].TextBased)
+                return Results.NotFound();
+
+            return Results.Text(transcoder.BuildSubtitlePlaylist(item.Info, id, track), "application/vnd.apple.mpegurl");
+        });
+
+        // ---- HLS: видеосегмент (транскодирование на лету) -----------------------
+        app.MapGet("/hls/{id}/segment/{index:int}.ts", async (string id, int index, HttpContext http, CancellationToken ct) =>
         {
             var item = library.Get(id);
             if (item is null) { http.Response.StatusCode = 404; return; }
@@ -180,7 +222,37 @@ public static class PrismHostApp
             http.Response.Headers.CacheControl = "no-store";
             try
             {
-                await transcoder.WriteSegmentAsync(item, index, ClampAudio(item.Info, audio), http.Response.Body, ct);
+                await transcoder.WriteVideoSegmentAsync(item, index, http.Response.Body, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                // Клиент ушёл со страницы / перемотал — делать больше нечего.
+            }
+        });
+
+        // ---- HLS: аудиосегмент (лёгкая сессия только-аудио) ---------------------
+        app.MapGet("/hls/{id}/audio/{track:int}/{index:int}.ts", async (string id, int track, int index, HttpContext http, CancellationToken ct) =>
+        {
+            var item = library.Get(id);
+            if (item is null) { http.Response.StatusCode = 404; return; }
+            await library.ResolveAsync(item, ct);
+            if (item.Mode != PlaybackMode.Transcode || item.Info is null)
+            {
+                http.Response.StatusCode = 400;
+                return;
+            }
+            if (track < 0 || track >= item.Info.AudioTracks.Count ||
+                index < 0 || index >= transcoder.SegmentCount(item.Info))
+            {
+                http.Response.StatusCode = 404;
+                return;
+            }
+
+            http.Response.ContentType = "video/mp2t";
+            http.Response.Headers.CacheControl = "no-store";
+            try
+            {
+                await transcoder.WriteAudioSegmentAsync(item, index, track, http.Response.Body, ct);
             }
             catch (OperationCanceledException)
             {
@@ -301,14 +373,6 @@ public static class PrismHostApp
                 if (byId.TryGetValue(id, out var dto))
                     foreach (var (k, v) in fields) dto[k] = v;
         }
-    }
-
-    // Приводит индекс аудиодорожки из запроса к допустимому диапазону файла.
-    private static int ClampAudio(MediaInfo info, int? audio)
-    {
-        var count = info.AudioTracks.Count;
-        if (count <= 0) return 0;
-        return Math.Clamp(audio ?? 0, 0, count - 1);
     }
 
     private static void ApplyCommandLine(string[] args, PlayerOptions options)

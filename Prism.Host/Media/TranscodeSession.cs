@@ -5,8 +5,8 @@ namespace Prism.Host.Media;
 /// <summary>
 /// Одна сессия транскодирования: процесс ffmpeg, который своим HLS-муксером пишет
 /// ограниченный диапазон сегментов <c>[StartIndex, EndIndex)</c> в собственную
-/// временную папку и затем завершается сам (по <c>-t</c>). Внутри сессии аудио —
-/// единый поток, поэтому стыки сегментов бесшовные; разрыв возможен только на
+/// временную папку и затем завершается сам (по <c>-t</c>). Внутри сессии поток
+/// непрерывный, поэтому стыки сегментов бесшовные; разрыв возможен только на
 /// границе между сессиями.
 /// </summary>
 internal sealed class TranscodeSession : IAsyncDisposable
@@ -17,8 +17,8 @@ internal sealed class TranscodeSession : IAsyncDisposable
     /// <summary>Индекс за последним сегментом сессии (полуинтервал).</summary>
     public int EndIndex { get; }
 
-    /// <summary>Индекс выбранной аудиодорожки (среди аудиопотоков файла).</summary>
-    public int AudioTrack { get; }
+    /// <summary>Какой поток производит сессия: "v" — видео, "aN" — аудиодорожка N.</summary>
+    public string Stream { get; }
 
     /// <summary>Временная папка с сегментами этой сессии.</summary>
     public string Directory { get; }
@@ -33,11 +33,11 @@ internal sealed class TranscodeSession : IAsyncDisposable
     private readonly object _gate = new();
     private volatile bool _disposed;
 
-    public TranscodeSession(int startIndex, int endIndex, int audioTrack, string dir, Process proc)
+    public TranscodeSession(int startIndex, int endIndex, string stream, string dir, Process proc)
     {
         StartIndex = startIndex;
         EndIndex = endIndex;
-        AudioTrack = audioTrack;
+        Stream = stream;
         Directory = dir;
         _proc = proc;
         LastAccessMs = Environment.TickCount64;

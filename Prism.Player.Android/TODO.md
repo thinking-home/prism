@@ -32,8 +32,9 @@
 - `pause`, `resume`, `stop`, `seek`, `next`, `previous`, `setAudio`, `setSubtitle`,
   `setRate`;
   - `next`/`previous` считает координатор (плеер не знает библиотеку) и шлёт URL;
-  - `setAudio`/`setSubtitle` **зависят от мультитрек-HLS Prism** (корневой `TODO.md`,
-    п.3): переключение — через ExoPlayer из одного URL.
+  - `setAudio`/`setSubtitle`: мультитрек-HLS в Prism готов (корневой `TODO.md`,
+    п.3 сделан 2026-08-10) — ExoPlayer уже видит дорожки из одного URL, осталось
+    только замапить команды на `TrackSelectionParameters`.
 
 Контракт топиков/пейлоадов — в `README.md` (раздел «MQTT-контракт управления»).
 

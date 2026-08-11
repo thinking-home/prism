@@ -54,7 +54,7 @@ export function Watch() {
   if (error) return <>{back}<p className="muted">Ошибка: {error}</p></>;
   if (!item) return <>{back}<p className="muted">Загрузка…</p></>;
 
-  const url = api.streamUrl(serverUrl, item, audio);
+  const url = api.streamUrl(serverUrl, item);
 
   if (!item.playable || !url) {
     return (
@@ -79,7 +79,7 @@ export function Watch() {
         <span>{item.streamType === "hls" ? "транскодирование HLS" : "прямой поток"}</span>
       </div>
 
-      <VideoPlayer src={url} type={item.streamType} subtitles={playerSubs} selectedSub={sub} />
+      <VideoPlayer src={url} type={item.streamType} subtitles={playerSubs} selectedSub={sub} audioTrack={audio} />
 
       {(showAudioPicker || showSubPicker) && (
         <div className="tracks">

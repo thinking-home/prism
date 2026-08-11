@@ -79,7 +79,7 @@ export function DebugPanel() {
       <div className="grid" style={{ marginTop: 16 }}>
         {sessions.length === 0 && <p className="muted">Активных сессий нет.</p>}
         {sessions.map((s) => (
-          <SessionCard key={`${s.mediaId}-${s.startIndex}-${s.audioTrack}`} s={s} cpu={cpuByPid[s.pid]} />
+          <SessionCard key={`${s.mediaId}-${s.startIndex}-${s.stream}`} s={s} cpu={cpuByPid[s.pid]} />
         ))}
       </div>
     </>
@@ -91,7 +91,9 @@ function SessionCard({ s, cpu }: { s: SessionInfo; cpu?: number }) {
   return (
     <div className="card dbg">
       <div className="dbg-head">
-        <span className="name">сегменты [{s.startIndex}…{s.endIndex}) · аудио {s.audioTrack}</span>
+        <span className="name">
+          сегменты [{s.startIndex}…{s.endIndex}) · {s.stream === "v" ? "видео" : `аудио ${s.stream.slice(1)}`}
+        </span>
         <span className={`badge ${s.alive ? "transcode" : "unsupported"}`}>
           {s.alive ? "работает" : "завершена"}
         </span>

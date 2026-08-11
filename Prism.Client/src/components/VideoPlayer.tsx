@@ -10,53 +10,59 @@ export interface PlayerSubtitle {
 }
 
 // Воспроизведение потока: HLS через hls.js (Chrome/Firefox/Edge) или нативно
-// (Safari), для direct — обычный src. Субтитры — как <track> (независимо от видео,
-// переключаются без пересборки потока). Смена аудиодорожки меняет src (новая HLS-
-// сессия), при этом позиция воспроизведения сохраняется.
+// (Safari), для direct — обычный src. Для HLS src — master-плейлист: аудиодорожки
+// переключаются внутри него самим плеером, без смены src и потери позиции.
+// Субтитры — как <track> (независимо от видео).
 export function VideoPlayer({
   src,
   type,
   subtitles = [],
   selectedSub = -1,
+  audioTrack = 0,
 }: {
   src: string;
   type: StreamType;
   subtitles?: PlayerSubtitle[];
   selectedSub?: number;
+  audioTrack?: number;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const lastTime = useRef(-1); // позиция для восстановления при смене аудиодорожки
+  const hlsRef = useRef<Hls | null>(null);
 
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
 
-    const startAt = lastTime.current;
-    const restoreNative = () => {
-      if (startAt > 0) video.currentTime = startAt;
-    };
-
     if (type === "hls" && Hls.isSupported()) {
-      const hls = new Hls({ maxBufferLength: 30, startPosition: startAt });
+      const hls = new Hls({ maxBufferLength: 30 });
+      hlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(video);
       return () => {
-        lastTime.current = video.currentTime || -1;
+        hlsRef.current = null;
         hls.destroy();
       };
     }
 
     // Нативный HLS (Safari) или прямой поток.
     video.src = src;
-    video.addEventListener("loadedmetadata", restoreNative, { once: true });
-    return () => {
-      lastTime.current = video.currentTime || -1;
-      video.removeEventListener("loadedmetadata", restoreNative);
-    };
   }, [src, type]);
 
-  // Показ выбранной дорожки субтитров. Зависит и от src, чтобы переприменить режим
-  // после пересборки потока при смене аудио.
+  // Переключение аудиодорожки: hls.js — рендиции AUDIO из master-плейлиста;
+  // нативный HLS (Safari) — стандартный audioTracks на <video>.
+  useEffect(() => {
+    const hls = hlsRef.current;
+    if (hls) {
+      if (audioTrack >= 0 && audioTrack < hls.audioTracks.length) hls.audioTrack = audioTrack;
+      return;
+    }
+    const tracks = (ref.current as any)?.audioTracks;
+    if (tracks) {
+      for (let i = 0; i < tracks.length; i++) tracks[i].enabled = i === audioTrack;
+    }
+  }, [audioTrack, src]);
+
+  // Показ выбранной дорожки субтитров.
   useEffect(() => {
     const video = ref.current;
     if (!video) return;

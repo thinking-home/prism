@@ -52,7 +52,8 @@ export interface SessionInfo {
   mediaId: string;
   startIndex: number;
   endIndex: number;
-  audioTrack: number;
+  stream: string; // "v" — видео, "aN" — аудиодорожка N
+
   produced: number;
   total: number;
   alive: boolean;
@@ -85,12 +86,10 @@ export const api = {
     getJson<MediaItem>(base, `/api/media/${id}`, signal),
   debug: (base: string, signal?: AbortSignal) => getJson<DebugInfo>(base, "/api/debug/sessions", signal),
 
-  // Абсолютный URL потока для <video>/hls.js. Для HLS добавляет выбранную аудиодорожку.
-  streamUrl: (base: string, item: MediaItem, audioIndex = 0): string | null => {
-    if (!item.streamUrl) return null;
-    const u = join(base, item.streamUrl);
-    return item.streamType === "hls" ? `${u}?audio=${audioIndex}` : u;
-  },
+  // Абсолютный URL потока для <video>/hls.js. Для HLS это master-плейлист —
+  // дорожки внутри него переключает сам плеер, URL от них не зависит.
+  streamUrl: (base: string, item: MediaItem): string | null =>
+    item.streamUrl ? join(base, item.streamUrl) : null,
 
   // Абсолютный URL дорожки субтитров в WebVTT.
   subtitleUrl: (base: string, id: string, index: number): string =>
