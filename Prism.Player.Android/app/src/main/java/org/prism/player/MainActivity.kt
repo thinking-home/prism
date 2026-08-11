@@ -77,6 +77,9 @@ class MainActivity : Activity() {
         }
 
         val view = PlayerView(this)
+        // Кнопка субтитров (CC) на панели управления: по умолчанию Media3 её
+        // прячет, без неё субтитры с пульта не включить.
+        view.setShowSubtitleButton(true)
 
         // Надпись об ошибке — по центру, поверх видео, скрыта до ошибки.
         val error = TextView(this).apply {

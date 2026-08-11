@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.widget.Toast
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -89,9 +90,16 @@ class MqttService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {}
 
     // Открыть файл: играть присланный URL и вывести экран на передний план.
+    // Если для этого URL сохранена позиция — продолжаем с неё (тост подсказывает).
     private fun openFile(url: String) {
         val c = controller ?: return
-        c.setMediaItem(MediaItem.fromUri(url))
+        val resumeMs = PlaybackPositions.get(this, url)
+        if (resumeMs != null) {
+            c.setMediaItem(MediaItem.fromUri(url), resumeMs)
+            Toast.makeText(this, getString(R.string.resume_from, formatTime(resumeMs)), Toast.LENGTH_LONG).show()
+        } else {
+            c.setMediaItem(MediaItem.fromUri(url))
+        }
         c.prepare()
         c.play()
         startActivity(
@@ -99,9 +107,31 @@ class MqttService : Service() {
         )
     }
 
-    // Закрыть файл: убрать его — плеер снова «пустой».
+    // Закрыть файл: убрать его — плеер снова «пустой». Позицию запоминаем до
+    // очистки: после clearMediaItems её уже не прочитать.
     private fun closeFile() {
-        controller?.clearMediaItems()
+        val c = controller ?: return
+        savePosition(c)
+        c.clearMediaItems()
+    }
+
+    // Запоминает позицию текущего файла (для «продолжить с места»). В конце фильма
+    // запись, наоборот, удаляется — пересматривать начнём с начала.
+    private fun savePosition(c: MediaController) {
+        val url = c.currentMediaItem?.localConfiguration?.uri?.toString() ?: return
+        if (c.playbackState == Player.STATE_ENDED) {
+            PlaybackPositions.clear(this, url)
+            return
+        }
+        val dur = c.duration
+        PlaybackPositions.save(this, url, c.currentPosition, if (dur == C.TIME_UNSET) 0 else dur)
+    }
+
+    // «1:23:45» или «7:05» — для тоста о продолжении.
+    private fun formatTime(ms: Long): String {
+        val s = ms / 1000
+        return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
+        else "%d:%02d".format(s / 60, s % 60)
     }
 
     // Статичная инфа о плеере (для обнаружения): имя + возможности.
@@ -122,6 +152,8 @@ class MqttService : Service() {
         if (item == null) {
             state.put("status", "idle")
         } else {
+            // Попутно (тикер + события пауз/окончания) запоминаем позицию просмотра.
+            savePosition(c)
             state.put("status", statusOf(c))
             item.localConfiguration?.uri?.let { state.put("url", it.toString()) }
             state.put("positionSec", c.currentPosition / 1000.0)

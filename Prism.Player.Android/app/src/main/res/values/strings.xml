@@ -3,6 +3,7 @@
      Язык выбирается автоматически по языку системы. -->
 <resources>
     <string name="error_playback">Failed to open video</string>
+    <string name="resume_from">Continuing from %1$s</string>
     <string name="back_to_close">Press Back again to close</string>
     <string name="mqtt_connected">MQTT: connected</string>
     <string name="mqtt_disconnected">MQTT: not connected</string>

@@ -2,6 +2,7 @@
 <!-- Русские строки (используются на устройствах с русским языком системы). -->
 <resources>
     <string name="error_playback">Не удалось открыть видео</string>
+    <string name="resume_from">Продолжаем с %1$s</string>
     <string name="back_to_close">Нажмите «Назад» ещё раз, чтобы закрыть</string>
     <string name="mqtt_connected">MQTT: подключено</string>
     <string name="mqtt_disconnected">MQTT: нет связи</string>
