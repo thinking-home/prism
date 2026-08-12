@@ -32,10 +32,13 @@
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
     </ItemGroup>
 
-    <!-- Конфиг лаунчера — рядом с exe, readonly (правка + перезапуск). -->
+    <!-- Конфиг лаунчера — рядом с exe, readonly (правка + перезапуск).
+         CopyToPublishDirectory нужен отдельно: без него конфиг попадает только
+         в build-выход, а publish (его пакует MSI) остаётся без него. -->
     <ItemGroup>
         <None Update="appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         </None>
     </ItemGroup>
 

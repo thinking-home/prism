@@ -12,7 +12,7 @@
          строк расширений. -->
     <Package Name="Prism Host"
              Manufacturer="Prism"
-             Version="0.2.0"
+             Version="0.3.0"
              UpgradeCode="8360D512-7A9E-4DA9-8645-BD7E5D061883"
              Scope="perMachine">
 
@@ -109,6 +109,28 @@
                     <Directory Id="LibraryPluginDir" Name="Prism.Plugins.Library">
                         <Files Include="!(bindpath.Prism.Plugins.Library)\**" />
                     </Directory>
+                </Directory>
+
+                <!-- Лаунчер (значок в трее + пункт «Отправить» проводника).
+                     В своей подпапке, потому что у него собственный
+                     appsettings.json — имя совпадает с конфигом хоста. -->
+                <Directory Id="LauncherDir" Name="launcher">
+                    <Component Id="LauncherExe">
+                        <File Id="PrismLauncherExe" Source="!(bindpath.Prism.Launcher)\Prism.Launcher.exe" KeyPath="yes" />
+                        <!-- Автозапуск при входе в систему. Пункт «Отправить»
+                             лаунчер создаёт себе сам при первом запуске: папка
+                             SendTo — в профиле пользователя, а установка
+                             машинная (см. ShellIntegration). -->
+                        <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                                       Name="PrismLauncher" Type="string"
+                                       Value="&quot;[LauncherDir]Prism.Launcher.exe&quot;" />
+                    </Component>
+                    <!-- Конфиг берём из исходников проекта, а не из publish-выхода:
+                         это статический файл, а инкрементальная публикация его
+                         иногда не докладывает (exe свежий, конфига нет). -->
+                    <Component Id="LauncherSettings">
+                        <File Id="LauncherAppSettings" Source="..\Prism.Launcher\appsettings.json" />
+                    </Component>
                 </Directory>
 
             </Directory>

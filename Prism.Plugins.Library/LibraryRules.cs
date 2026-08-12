@@ -12,10 +12,11 @@ namespace Prism.Plugins.Library;
 /// </summary>
 public sealed class LibraryRule
 {
-    /// <summary>Шаблон относительного пути с плейсхолдерами <c>{имя}</c>,
-    /// напр. <c>series/{name}/{title} s{season}e{episode}</c>. Сопоставление —
-    /// без расширения файла и без учёта регистра; плейсхолдер матчит кусок
-    /// одного сегмента пути (не пересекает <c>/</c>).</summary>
+    /// <summary>Шаблон относительного пути с плейсхолдерами <c>{имя}</c> и
+    /// звёздочками <c>*</c>, напр. <c>*/{series}.s{season}e{episode}*</c>.
+    /// Сопоставление — с путём целиком, без расширения файла и без учёта
+    /// регистра; <c>{имя}</c> захватывает непустой кусок одного сегмента пути,
+    /// <c>*</c> — любой, в том числе пустой, и никуда не подставляется.</summary>
     public string Path { get; set; } = "";
 
     /// <summary>Путь к группе через <c>/</c> (напр. <c>Сериалы/{name}</c>);
@@ -31,6 +32,12 @@ public sealed class LibraryRule
 public sealed class CompiledRule
 {
     private static readonly Regex Placeholder = new(@"\{(\w+)\}");
+
+    // Разбор шаблона: плейсхолдер {имя} или звёздочка. Звёздочка — «любые
+    // символы сегмента, в том числе ни одного»; нужна для реальных имён, где
+    // до/после значимого куска стоит произвольный мусор («…1080p.WEB-DL.RG»),
+    // которого может и не быть вовсе.
+    private static readonly Regex TemplateToken = new(@"\{(\w+)\}|\*");
 
     private readonly Regex _regex;
 
@@ -91,18 +98,38 @@ public sealed class CompiledRule
         Placeholder.Replace(template, m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
 
     // Шаблон пути → regex: литералы экранируются, {имя} → ленивая именованная
-    // группа «любые символы, кроме /». Ленивость + якоря дают ожидаемый разбор
-    // «{title}s{season}e{episode}», а запрет '/' не пускает плейсхолдер через
-    // границу папки. Регистр не учитывается (s01e02 == S01E02).
+    // группа «непустой кусок без /», * → то же самое, но без захвата и с
+    // допустимым пустым совпадением. Ленивость + якоря дают ожидаемый разбор
+    // «{title}s{season}e{episode}», а запрет '/' не пускает плейсхолдер и
+    // звёздочку через границу папки. Регистр не учитывается (s01e02 == S01E02).
+    //
+    // Особый случай — плейсхолдер прямо перед звёздочкой: две ленивые группы
+    // подряд делят строку по минимуму, и {episode}* дал бы «0» вместо «01»
+    // (остаток забрала бы звёздочка). Поэтому там плейсхолдер жадно берёт
+    // подряд идущие буквы и цифры — до первого разделителя (точки, пробела,
+    // скобки), с которого и начинается «мусор» реальных имён.
     private static Regex Compile(string template)
     {
         var normalized = template.Replace('\\', '/').TrimStart('/');
         var sb = new StringBuilder("^");
         var pos = 0;
-        foreach (Match m in Placeholder.Matches(normalized))
+        var tokens = TemplateToken.Matches(normalized);
+        for (var i = 0; i < tokens.Count; i++)
         {
+            var m = tokens[i];
             sb.Append(Regex.Escape(normalized[pos..m.Index]));
-            sb.Append("(?<").Append(m.Groups[1].Value).Append(">[^/]+?)");
+            if (m.Groups[1].Success)
+            {
+                var beforeStar = i + 1 < tokens.Count
+                    && !tokens[i + 1].Groups[1].Success
+                    && tokens[i + 1].Index == m.Index + m.Length;
+                sb.Append("(?<").Append(m.Groups[1].Value).Append('>')
+                  .Append(beforeStar ? "[^\\W_]+" : "[^/]+?").Append(')');
+            }
+            else
+            {
+                sb.Append("[^/]*?");
+            }
             pos = m.Index + m.Length;
         }
         sb.Append(Regex.Escape(normalized[pos..])).Append('$');

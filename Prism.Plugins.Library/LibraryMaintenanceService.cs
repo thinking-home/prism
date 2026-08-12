@@ -52,8 +52,7 @@ public sealed class LibraryMaintenanceService(
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        if (_rules.Count > 0)
-            logger.LogInformation("Правил автозаполнения: {count}", _rules.Count);
+        logger.LogInformation("Правил автозаполнения: {count}", _rules.Count);
 
         while (!ct.IsCancellationRequested)
         {
@@ -63,9 +62,7 @@ public sealed class LibraryMaintenanceService(
                 var remapped = await RemapAsync(files, ct);
                 var autofilled = await ApplyRulesAsync(files, ct);
 
-                // Итог прохода — в лог; холостые проходы каждые 5 минут не шумят.
-                var level = remapped > 0 || autofilled > 0 ? LogLevel.Information : LogLevel.Debug;
-                logger.Log(level, "Обслуживание библиотеки: файлов {files}, ремап {remapped}, автозаполнено {autofilled}",
+                logger.LogInformation("Обслуживание библиотеки: файлов {files}, ремап {remapped}, автозаполнено {autofilled}",
                     files.Count, remapped, autofilled);
             }
             catch (OperationCanceledException)
