@@ -19,6 +19,7 @@ public class LibraryDbContext(DbContextOptions<LibraryDbContext> options) : DbCo
         {
             e.ToTable("Prism_Node");
             e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever(); // GUID назначает код
         });
         b.Entity<NodeItemRecord>(e =>
         {

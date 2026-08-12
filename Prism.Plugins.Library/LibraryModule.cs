@@ -35,9 +35,11 @@ public sealed class LibraryModule : IPrismModule
         });
 
         services.AddSingleton<IMediaMetaSource, MetadataMetaSource>();
-        // Фоновый ремап: переносит записи на новый id, когда содержимое по прежнему
-        // пути сменилось (докачка/перезапись). Работает при старте и периодически.
-        services.AddHostedService<LibraryRemapService>();
+        // Фоновое обслуживание (при старте и периодически): ремап записей на новый id
+        // при смене содержимого + правила автозаполнения для нетронутых файлов.
+        // Синглтон + hosted-обёртка: тот же экземпляр дёргает ручка /api/library/scan.
+        services.AddSingleton<LibraryMaintenanceService>();
+        services.AddHostedService(sp => sp.GetRequiredService<LibraryMaintenanceService>());
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -49,7 +51,7 @@ public sealed class LibraryModule : IPrismModule
         app.MapGet("/api/library/tree",
             async (IDbContextFactory<LibraryDbContext> factory, IMediaIdentity identity, CancellationToken ct) =>
         {
-            var live = (await identity.GetLiveIdsAsync(ct)).ToHashSet();
+            var live = (await identity.GetLiveFilesAsync(ct)).Select(f => f.Id).ToHashSet();
 
             await using var db = await factory.CreateDbContextAsync(ct);
             var nodes = await db.Nodes.ToListAsync(ct);
@@ -83,18 +85,18 @@ public sealed class LibraryModule : IPrismModule
                 return Results.BadRequest("Имя группы не может быть пустым.");
 
             await using var db = await factory.CreateDbContextAsync(ct);
-            if (input.ParentId is long parent && !await db.Nodes.AnyAsync(n => n.Id == parent, ct))
+            if (input.ParentId is Guid parent && !await db.Nodes.AnyAsync(n => n.Id == parent, ct))
                 return Results.BadRequest("Родительская группа не существует.");
 
-            var node = new LibraryNode { ParentId = input.ParentId, Name = input.Name.Trim() };
+            var node = new LibraryNode { Id = Guid.NewGuid(), ParentId = input.ParentId, Name = input.Name.Trim() };
             db.Nodes.Add(node);
             await db.SaveChangesAsync(ct);
             return Results.Json(new { id = node.Id, parentId = node.ParentId, name = node.Name });
         });
 
         // Переименование и/или перенос ветки (перенос = смена ParentId).
-        app.MapPut("/api/library/nodes/{id:long}",
-            async (long id, NodeInput input, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        app.MapPut("/api/library/nodes/{id:guid}",
+            async (Guid id, NodeInput input, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(input.Name))
                 return Results.BadRequest("Имя группы не может быть пустым.");
@@ -103,13 +105,13 @@ public sealed class LibraryModule : IPrismModule
             var node = await db.Nodes.FindAsync([id], ct);
             if (node is null) return Results.NotFound();
 
-            if (input.ParentId is long parent)
+            if (input.ParentId is Guid parent)
             {
                 // Группа не может переехать под саму себя или своего потомка.
                 var all = await db.Nodes.ToDictionaryAsync(n => n.Id, ct);
                 if (!all.ContainsKey(parent))
                     return Results.BadRequest("Родительская группа не существует.");
-                for (long? p = parent; p is long cur; p = all.TryGetValue(cur, out var n) ? n.ParentId : null)
+                for (Guid? p = parent; p is Guid cur; p = all.TryGetValue(cur, out var n) ? n.ParentId : null)
                     if (cur == id) return Results.BadRequest("Нельзя перенести группу внутрь самой себя.");
             }
 
@@ -121,20 +123,20 @@ public sealed class LibraryModule : IPrismModule
 
         // Удаление группы с потомками, их членством и метой. Файлы не трогаются —
         // они просто выпадают из удалённых групп.
-        app.MapDelete("/api/library/nodes/{id:long}",
-            async (long id, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        app.MapDelete("/api/library/nodes/{id:guid}",
+            async (Guid id, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
             await using var db = await factory.CreateDbContextAsync(ct);
             var all = await db.Nodes.ToListAsync(ct);
             if (all.All(n => n.Id != id)) return Results.NotFound();
 
             // Собираем поддерево обходом в ширину (дерево целиком уже в памяти).
-            var doomed = new HashSet<long> { id };
+            var doomed = new HashSet<Guid> { id };
             for (var added = true; added;)
             {
                 added = false;
                 foreach (var n in all)
-                    if (n.ParentId is long p && doomed.Contains(p) && doomed.Add(n.Id))
+                    if (n.ParentId is Guid p && doomed.Contains(p) && doomed.Add(n.Id))
                         added = true;
             }
 
@@ -149,8 +151,8 @@ public sealed class LibraryModule : IPrismModule
         // ---- Членство файлов в группах -------------------------------------------
         // Существование файла не проверяется намеренно: осиротевшие связи — штатное
         // состояние (диск отключён, файл переезжает); чистка — явной командой (gc).
-        app.MapPut("/api/library/nodes/{id:long}/items/{mediaId}",
-            async (long id, string mediaId, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        app.MapPut("/api/library/nodes/{id:guid}/items/{mediaId}",
+            async (Guid id, string mediaId, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
             await using var db = await factory.CreateDbContextAsync(ct);
             if (!await db.Nodes.AnyAsync(n => n.Id == id, ct)) return Results.NotFound();
@@ -162,8 +164,8 @@ public sealed class LibraryModule : IPrismModule
             return Results.NoContent();
         });
 
-        app.MapDelete("/api/library/nodes/{id:long}/items/{mediaId}",
-            async (long id, string mediaId, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        app.MapDelete("/api/library/nodes/{id:guid}/items/{mediaId}",
+            async (Guid id, string mediaId, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
             await using var db = await factory.CreateDbContextAsync(ct);
             if (!await db.Nodes.AnyAsync(n => n.Id == id, ct)) return Results.NotFound();
@@ -198,8 +200,8 @@ public sealed class LibraryModule : IPrismModule
         });
 
         // ---- Мета группы ---------------------------------------------------------
-        app.MapPut("/api/library/nodes/{id:long}/meta",
-            async (long id, Dictionary<string, string?> input,
+        app.MapPut("/api/library/nodes/{id:guid}/meta",
+            async (Guid id, Dictionary<string, string?> input,
                 IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
             await using var db = await factory.CreateDbContextAsync(ct);
@@ -208,8 +210,8 @@ public sealed class LibraryModule : IPrismModule
             return Results.NoContent();
         });
 
-        app.MapDelete("/api/library/nodes/{id:long}/meta",
-            async (long id, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        app.MapDelete("/api/library/nodes/{id:guid}/meta",
+            async (Guid id, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
             await using var db = await factory.CreateDbContextAsync(ct);
             if (!await db.Nodes.AnyAsync(n => n.Id == id, ct)) return Results.NotFound();
@@ -219,12 +221,23 @@ public sealed class LibraryModule : IPrismModule
             return Results.NoContent();
         });
 
+        // ---- Прогнать обслуживание немедленно -------------------------------------
+        // Список файлов и так пересканируется каждым запросом; эта ручка будит
+        // фоновый цикл (ремап + правила автозаполнения), чтобы не ждать 5-минутный
+        // таймер — например, сразу после добавления файлов. Завершения не ждёт:
+        // итоги прохода пишутся в лог хоста.
+        app.MapPost("/api/library/scan", (LibraryMaintenanceService maintenance) =>
+        {
+            maintenance.RequestScan();
+            return Results.Accepted();
+        });
+
         // ---- Сборка мусора: удалить записи файлов, которых нет на диске ----------
         // Только по явной команде — автоматической чистки нет намеренно.
         app.MapPost("/api/library/gc",
             async (IMediaIdentity identity, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
-            var live = (await identity.GetLiveIdsAsync(ct)).ToHashSet();
+            var live = (await identity.GetLiveFilesAsync(ct)).Select(f => f.Id).ToHashSet();
 
             await using var db = await factory.CreateDbContextAsync(ct);
             var deadItems = (await db.NodeItems.ToListAsync(ct)).Where(i => !live.Contains(i.FileKey)).ToList();
@@ -284,4 +297,4 @@ public sealed class LibraryModule : IPrismModule
 }
 
 /// <summary>Входная модель группы (создание и правка).</summary>
-public sealed record NodeInput(long? ParentId, string Name);
+public sealed record NodeInput(Guid? ParentId, string Name);

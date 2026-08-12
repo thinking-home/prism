@@ -1,10 +1,12 @@
 namespace Prism.Plugins.Library;
 
-/// <summary>Группа виртуального дерева библиотеки; вложенность — через ParentId.</summary>
+/// <summary>Группа виртуального дерева библиотеки; вложенность — через ParentId.
+/// Id — GUID, генерируется кодом при создании (без обращения к БД), поэтому
+/// связанные записи можно сохранять одной операцией.</summary>
 public class LibraryNode
 {
-    public long Id { get; set; }
-    public long? ParentId { get; set; }
+    public Guid Id { get; set; }
+    public Guid? ParentId { get; set; }
     public string Name { get; set; } = "";
 }
 
@@ -12,7 +14,7 @@ public class LibraryNode
 /// поэтому связь переживает переносы файлов; файл может быть в нескольких группах.</summary>
 public class NodeItemRecord
 {
-    public long NodeId { get; set; }
+    public Guid NodeId { get; set; }
     public string FileKey { get; set; } = "";
 }
 
