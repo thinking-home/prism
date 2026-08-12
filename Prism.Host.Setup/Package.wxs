@@ -19,28 +19,13 @@
         <MajorUpgrade DowngradeErrorMessage="A newer version of Prism Host is already installed." />
         <MediaTemplate EmbedCab="yes" />
 
-        <!-- UI: стандартный набор диалогов WixUI_InstallDir, где диалог выбора
-             папки перенацелен на MEDIAFOLDER — куда ставить саму программу,
-             пользователю выбирать незачем. На шаге лицензии показывается
-             License.rtf (MIT + сведения о вложенной сборке FFmpeg). -->
-        <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="MEDIAFOLDER" />
+        <!-- UI: минимальный набор диалогов (лицензия + установка). Папки с видео
+             в инсталляторе нет намеренно: их может быть несколько, а правила
+             автозаполнения всё равно задаются только в appsettings.json — то есть
+             руками конфиг править придётся в любом случае. На шаге лицензии
+             показывается License.rtf (MIT + сведения о вложенной сборке FFmpeg). -->
+        <ui:WixUI Id="WixUI_Minimal" />
         <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
-
-        <!-- «Запоминание» выбранной папки (стандартный remember-паттерн):
-             при установке путь пишется в реестр (компонент MediaFolderReg ниже),
-             при обновлении — вычитывается обратно, если не задан явно
-             (msiexec ... MEDIAFOLDER=D:\Video). -->
-        <Property Id="MEDIAFOLDER" Secure="yes" />
-        <Property Id="PRISM_SAVED_MEDIAFOLDER">
-            <RegistrySearch Id="SavedMediaFolder" Root="HKLM" Key="SOFTWARE\Prism\Host" Name="MediaFolder" Type="raw" />
-        </Property>
-        <SetProperty Id="MEDIAFOLDER" Value="[PRISM_SAVED_MEDIAFOLDER]" After="AppSearch"
-                     Condition="NOT MEDIAFOLDER AND PRISM_SAVED_MEDIAFOLDER" />
-
-        <!-- Папка по умолчанию: <корневой диск>\Videos (меняется в диалоге). -->
-        <StandardDirectory Id="TARGETDIR">
-            <Directory Id="MEDIAFOLDER" Name="Videos" />
-        </StandardDirectory>
 
         <StandardDirectory Id="ProgramFiles64Folder">
             <Directory Id="INSTALLFOLDER" Name="Prism Host">
@@ -56,20 +41,16 @@
                                               Scope="localSubnet"
                                               Profile="all" />
                     </File>
-                    <!-- Выбранная папка с видео уходит службе штатным аргументом
-                         «media» командной строки (хост его уже умеет). Хвостовой
-                         '\' перед закрывающей кавычкой — экранирование:
-                         [MEDIAFOLDER] заканчивается на '\', и без добавочного
-                         он «съел» бы кавычку при разборе командной строки. -->
+                    <!-- Без аргументов: папки с медиа служба берёт из
+                         appsettings.json (Player:MediaDirectories). -->
                     <ServiceInstall Id="PrismHostService"
                                     Name="PrismHost"
                                     DisplayName="Prism Host"
-                                    Description="Prism media server: streams video from a local folder over HTTP (HLS)."
+                                    Description="Prism media server: streams video from local folders over HTTP (HLS)."
                                     Type="ownProcess"
                                     Start="auto"
                                     Account="LocalSystem"
-                                    ErrorControl="normal"
-                                    Arguments="--media &quot;[MEDIAFOLDER]\&quot;" />
+                                    ErrorControl="normal" />
                     <ServiceControl Id="PrismHostControl"
                                     Name="PrismHost"
                                     Start="install"
@@ -80,15 +61,6 @@
 
                 <Component Id="AppSettings">
                     <File Source="!(bindpath.Prism.Host.Service)\appsettings.json" />
-                </Component>
-
-                <!-- Путь к папке с видео в реестре: отсюда его вычитывает
-                     обновление (remember-паттерн выше), позже — интеграция
-                     с проводником. -->
-                <Component Id="MediaFolderReg">
-                    <RegistryValue Root="HKLM" Key="SOFTWARE\Prism\Host"
-                                   Name="MediaFolder" Type="string"
-                                   Value="[MEDIAFOLDER]" KeyPath="yes" />
                 </Component>
 
                 <!-- Вложенная сборка ffmpeg (см. FetchFFmpeg в .wixproj):

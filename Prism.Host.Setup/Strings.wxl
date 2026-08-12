@@ -1,9 +1,4 @@
-<!-- Переопределение штатных строк WixUI: диалог выбора папки в этом
-     инсталляторе выбирает не папку установки, а корневую папку с видео. -->
+<!-- Переопределений штатных строк WixUI нет: диалог выбора папки с видео убран,
+     инсталлятор использует стандартный минимальный набор (лицензия + установка). -->
 <WixLocalization xmlns="http://wixtoolset.org/schemas/v4/wxl" Culture="en-US">
-    <String Id="InstallDirDlgTitle" Value="{\WixUI_Font_Title}Video Folder" />
-    <String Id="InstallDirDlgDescription" Value="Choose the root folder Prism Host will stream video from." />
-    <String Id="InstallDirDlgFolderLabel" Value="Stream video from:" />
-    <String Id="BrowseDlgTitle" Value="{\WixUI_Font_Title}Choose Video Folder" />
-    <String Id="BrowseDlgDescription" Value="Select the root folder with your video files." />
 </WixLocalization>

@@ -34,7 +34,10 @@ export function VideoPlayer({
     if (!video) return;
 
     if (type === "hls" && Hls.isSupported()) {
-      const hls = new Hls({ maxBufferLength: 30 });
+      // Субтитры в браузере показываем через <track>, поэтому свои текстовые
+      // дорожки из рендиций master-плейлиста hls.js не создаёт: иначе один и тот
+      // же текст рисуют оба. Рендиции в плейлисте нужны плеерам вроде ExoPlayer.
+      const hls = new Hls({ maxBufferLength: 30, renderTextTracksNatively: false });
       hlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(video);
@@ -62,15 +65,15 @@ export function VideoPlayer({
     }
   }, [audioTrack, src]);
 
-  // Показ выбранной дорожки субтитров.
+  // Показ выбранной дорожки субтитров. Перебираем свои <track>, а не весь
+  // video.textTracks: у чужих дорожек (рендиции плеера) id пустой, а
+  // Number("") === 0 — и они включались бы заодно с нашей первой дорожкой.
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    const tracks = video.textTracks;
-    for (let i = 0; i < tracks.length; i++) {
-      const tt = tracks[i];
-      tt.mode = Number(tt.id) === selectedSub ? "showing" : "disabled";
-    }
+    video.querySelectorAll("track").forEach((el) => {
+      el.track.mode = Number(el.id) === selectedSub ? "showing" : "disabled";
+    });
   }, [selectedSub, src, subtitles]);
 
   return (
