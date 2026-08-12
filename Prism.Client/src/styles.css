@@ -147,6 +147,74 @@ code {
   margin-top: 4px;
 }
 
+/* --- дерево библиотеки --- */
+.tree-summary {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.tree-node > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.tree-node > summary::-webkit-details-marker {
+  display: none;
+}
+.tree-node > summary::before {
+  content: "▸";
+  color: #8b90a0;
+  font-size: 11px;
+}
+.tree-node[open] > summary::before {
+  content: "▾";
+}
+.tree-node > summary:hover {
+  background: #161821;
+}
+.tree-count {
+  color: #8b90a0;
+  font-size: 12px;
+}
+.tree-children {
+  margin-left: 14px;
+  border-left: 1px solid #23252e;
+  padding-left: 8px;
+}
+.tree-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: #e7e9ee;
+}
+a.tree-file:hover {
+  background: #161821;
+  text-decoration: none;
+}
+.tree-file.disabled,
+.tree-file.missing {
+  opacity: 0.55;
+}
+.tree-name {
+  font-weight: 600;
+}
+.tree-file .tree-name {
+  font-weight: 400;
+}
+.tree-file-name {
+  color: #8b90a0;
+  font-size: 12px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .badge {
   font-size: 12px;
   padding: 3px 9px;

@@ -48,6 +48,27 @@ export interface MediaItem {
   statusMessage: string | null;
 }
 
+// Дерево библиотеки (плагин Prism.Plugins.Library). Группы плоским списком —
+// вложенность через parentId; членство отдельным списком, файл может быть в
+// нескольких группах. present:false — запись о файле, которого сейчас нет на диске.
+export interface LibraryNode {
+  id: string;
+  parentId: string | null;
+  name: string;
+  meta: Record<string, string>;
+}
+
+export interface LibraryMembership {
+  nodeId: string;
+  mediaId: string;
+  present: boolean;
+}
+
+export interface LibraryTree {
+  nodes: LibraryNode[];
+  items: LibraryMembership[];
+}
+
 export interface SessionInfo {
   mediaId: string;
   startIndex: number;
@@ -85,6 +106,16 @@ export const api = {
   mediaItem: (base: string, id: string, signal?: AbortSignal) =>
     getJson<MediaItem>(base, `/api/media/${id}`, signal),
   debug: (base: string, signal?: AbortSignal) => getJson<DebugInfo>(base, "/api/debug/sessions", signal),
+
+  // Дерево библиотеки. Плагин метаданных опционален, поэтому отсутствие ручки —
+  // не ошибка: пустое дерево означает «все файлы вне групп».
+  tree: (base: string, signal?: AbortSignal) =>
+    getJson<LibraryTree>(base, "/api/library/tree", signal).catch(
+      (e): LibraryTree => {
+        if (signal?.aborted) throw e;
+        return { nodes: [], items: [] };
+      },
+    ),
 
   // Абсолютный URL потока для <video>/hls.js. Для HLS это master-плейлист —
   // дорожки внутри него переключает сам плеер, URL от них не зависит.

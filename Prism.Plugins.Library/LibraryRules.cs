@@ -13,10 +13,11 @@ namespace Prism.Plugins.Library;
 public sealed class LibraryRule
 {
     /// <summary>Шаблон относительного пути с плейсхолдерами <c>{имя}</c> и
-    /// звёздочками <c>*</c>, напр. <c>*/{series}.s{season}e{episode}*</c>.
+    /// звёздочками <c>*</c>, напр. <c>*/{series}.s{season:#}e{episode:#}*</c>.
     /// Сопоставление — с путём целиком, без расширения файла и без учёта
     /// регистра; <c>{имя}</c> захватывает непустой кусок одного сегмента пути,
-    /// <c>*</c> — любой, в том числе пустой, и никуда не подставляется.</summary>
+    /// <c>{имя:#}</c> — только цифры, <c>*</c> — любой кусок, в том числе пустой,
+    /// и никуда не подставляется.</summary>
     public string Path { get; set; } = "";
 
     /// <summary>Путь к группе через <c>/</c> (напр. <c>Сериалы/{name}</c>);
@@ -31,13 +32,13 @@ public sealed class LibraryRule
 /// <summary>Скомпилированное правило: шаблон пути превращён в regex.</summary>
 public sealed class CompiledRule
 {
-    private static readonly Regex Placeholder = new(@"\{(\w+)\}");
-
-    // Разбор шаблона: плейсхолдер {имя} или звёздочка. Звёздочка — «любые
-    // символы сегмента, в том числе ни одного»; нужна для реальных имён, где
-    // до/после значимого куска стоит произвольный мусор («…1080p.WEB-DL.RG»),
-    // которого может и не быть вовсе.
-    private static readonly Regex TemplateToken = new(@"\{(\w+)\}|\*");
+    // Разбор шаблона: плейсхолдер {имя} — с необязательным типом «:#», то есть
+    // «только цифры», — или звёздочка. Звёздочка это «любые символы сегмента, в
+    // том числе ни одного»; нужна для реальных имён, где до/после значимого куска
+    // стоит произвольный мусор («…1080p.WEB-DL.RG»), которого может и не быть.
+    // Тем же выражением подставляются значения в действия правила, поэтому в
+    // Node/Meta допустимы обе записи — и {season}, и {season:#}.
+    private static readonly Regex Token = new(@"\{(\w+)(?::(#))?\}|\*");
 
     private readonly Regex _regex;
 
@@ -95,7 +96,8 @@ public sealed class CompiledRule
     /// значение меты). Неизвестный плейсхолдер остаётся литералом — опечатка в
     /// правиле сразу видна в результате.</summary>
     public static string Substitute(string template, Dictionary<string, string> values) =>
-        Placeholder.Replace(template, m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
+        Token.Replace(template, m =>
+            m.Groups[1].Success && values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
 
     // Шаблон пути → regex: литералы экранируются, {имя} → ленивая именованная
     // группа «непустой кусок без /», * → то же самое, но без захвата и с
@@ -103,17 +105,22 @@ public sealed class CompiledRule
     // «{title}s{season}e{episode}», а запрет '/' не пускает плейсхолдер и
     // звёздочку через границу папки. Регистр не учитывается (s01e02 == S01E02).
     //
+    // {имя:#} — только цифры: без него `s{season}e{episode}` цепляется за буквы
+    // «S» и «e» в обычных словах («Siyanie.Chistogo» становится сериалом).
+    //
     // Особый случай — плейсхолдер прямо перед звёздочкой: две ленивые группы
     // подряд делят строку по минимуму, и {episode}* дал бы «0» вместо «01»
     // (остаток забрала бы звёздочка). Поэтому там плейсхолдер жадно берёт
     // подряд идущие буквы и цифры — до первого разделителя (точки, пробела,
-    // скобки), с которого и начинается «мусор» реальных имён.
+    // скобки), с которого и начинается «мусор» реальных имён. Цифровому
+    // плейсхолдеру это не нужно: он и так жадный и сам останавливается на
+    // первом нецифровом символе.
     private static Regex Compile(string template)
     {
         var normalized = template.Replace('\\', '/').TrimStart('/');
         var sb = new StringBuilder("^");
         var pos = 0;
-        var tokens = TemplateToken.Matches(normalized);
+        var tokens = Token.Matches(normalized);
         for (var i = 0; i < tokens.Count; i++)
         {
             var m = tokens[i];
@@ -123,8 +130,8 @@ public sealed class CompiledRule
                 var beforeStar = i + 1 < tokens.Count
                     && !tokens[i + 1].Groups[1].Success
                     && tokens[i + 1].Index == m.Index + m.Length;
-                sb.Append("(?<").Append(m.Groups[1].Value).Append('>')
-                  .Append(beforeStar ? "[^\\W_]+" : "[^/]+?").Append(')');
+                var body = m.Groups[2].Success ? "\\d+" : beforeStar ? "[^\\W_]+" : "[^/]+?";
+                sb.Append("(?<").Append(m.Groups[1].Value).Append('>').Append(body).Append(')');
             }
             else
             {
