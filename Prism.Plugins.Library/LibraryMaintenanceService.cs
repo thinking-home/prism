@@ -132,6 +132,7 @@ public sealed class LibraryMaintenanceService(
         if (_rules.Count == 0) return 0;
 
         await using var db = await factory.CreateDbContextAsync(ct);
+
         // «Тронутые» файлы: есть хоть одна запись — мета или членство, не важно,
         // от правила или от руки. К таким правила не прикасаются.
         var touched = (await db.NodeItems.Select(i => i.FileKey).Distinct().ToListAsync(ct))

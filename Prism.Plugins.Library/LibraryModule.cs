@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Prism.Abstractions;
 using ThinkingHome.Migrator;
 
@@ -226,8 +227,15 @@ public sealed class LibraryModule : IPrismModule
         // фоновый цикл (ремап + правила автозаполнения), чтобы не ждать 5-минутный
         // таймер — например, сразу после добавления файлов. Завершения не ждёт:
         // итоги прохода пишутся в лог хоста.
-        app.MapPost("/api/library/scan", (LibraryMaintenanceService maintenance) =>
+        // ?replace=true — режим отладки правил: библиотека очищается здесь же (это
+        // несколько DELETE, ждать нечего), а дальше обычный проход раскладывает её
+        // заново. Поэтому замена возможна только с ручки: фоновый цикл про неё не
+        // знает и сам ничего не удаляет.
+        app.MapPost("/api/library/scan",
+            async (LibraryMaintenanceService maintenance, IDbContextFactory<LibraryDbContext> factory,
+                ILoggerFactory loggers, bool? replace, CancellationToken ct) =>
         {
+            if (replace == true) await ClearLibraryAsync(factory, loggers.CreateLogger<LibraryModule>(), ct);
             maintenance.RequestScan();
             return Results.Accepted();
         });
@@ -249,6 +257,27 @@ public sealed class LibraryModule : IPrismModule
             await db.SaveChangesAsync(ct);
             return Results.Json(new { removedItems = deadItems.Count, removedMeta = deadMeta.Count });
         });
+    }
+
+    // Полная очистка библиотеки: группы, членство и мета — и файлов, и групп.
+    // Записи файлов, которых сейчас нет на диске, тоже удаляются: это отладка
+    // правил, а не бережное обновление, поэтому мета такого файла не вернётся,
+    // пока его диск не подключат обратно.
+    private static async Task ClearLibraryAsync(IDbContextFactory<LibraryDbContext> factory,
+        ILogger logger, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var items = await db.NodeItems.ToListAsync(ct);
+        var meta = await db.Meta.ToListAsync(ct);
+        var nodes = await db.Nodes.ToListAsync(ct);
+
+        db.NodeItems.RemoveRange(items);
+        db.Meta.RemoveRange(meta);
+        db.Nodes.RemoveRange(nodes);
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Библиотека очищена перед раскладкой: группы {nodes}, членство {items}, мета {meta}",
+            nodes.Count, items.Count, meta.Count);
     }
 
     // Слияние меты: значение null удаляет ключ, остальные — вставка/замена.
