@@ -1,8 +1,11 @@
 namespace Prism.Host.Media;
 
-/// <summary>Аудиодорожка файла. <see cref="Index"/> — порядковый номер среди
-/// аудиопотоков (для ffmpeg <c>-map 0:a:Index</c>).</summary>
-public sealed record AudioTrack(int Index, string? Codec, string? Language, string? Title, int Channels);
+/// <summary>Аудиодорожка файла. <see cref="Index"/> — номер в общем списке дорожек
+/// (вшитые идут первыми, поэтому для них это же и номер потока — <c>-map 0:a:Index</c>).
+/// <see cref="Path"/> — путь к отдельному аудиофайлу рядом с видео; null — дорожка
+/// вшита в контейнер.</summary>
+public sealed record AudioTrack(int Index, string? Codec, string? Language, string? Title, int Channels,
+    string? Path = null);
 
 /// <summary>Дорожка субтитров. <see cref="Index"/> — номер в общем списке дорожек
 /// файла (вшитые идут первыми, поэтому для них это же и номер потока —
@@ -34,15 +37,19 @@ public sealed record MediaInfo
     {
         get
         {
-            string[] nativeContainers = ["mov", "mp4", "m4a", "3gp", "3g2", "mj2", "webm", "matroska,webm"];
+            string[] nativeContainers = ["mov", "mp4", "m4a", "3gp", "3g2", "mj2", "webm"];
             string[] nativeVideo = ["h264", "vp8", "vp9", "av1"];
             string[] nativeAudio = ["aac", "mp3", "opus", "vorbis"];
 
-            // ffprobe сообщает matroska и webm одним именем формата; браузерным
-            // является только настоящий WebM, а дёшево отличить их нельзя, поэтому
-            // всё семейство matroska безопаснее считать требующим ремукса.
-            var container = Container ?? "";
-            bool containerOk = nativeContainers.Contains(container) && container != "matroska,webm";
+            // ffprobe отдаёт format_name СПИСКОМ имён своего демуксера через запятую
+            // (у mp4 это «mov,mp4,m4a,3gp,3g2,mj2»), поэтому сравнивать надо по
+            // элементам, а не строку целиком.
+            var names = (Container ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+            // Matroska и WebM обслуживает один демуксер («matroska,webm»), а браузерным
+            // является только настоящий WebM; дёшево отличить их нельзя, поэтому всё
+            // семейство matroska считаем требующим ремукса.
+            bool containerOk = names.Any(nativeContainers.Contains) && !names.Contains("matroska");
             bool videoOk = VideoCodec is not null && nativeVideo.Contains(VideoCodec);
             bool audioOk = !HasAudio || nativeAudio.Contains(AudioCodec!);
 

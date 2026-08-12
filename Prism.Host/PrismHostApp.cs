@@ -181,7 +181,7 @@ public static class PrismHostApp
             await library.ResolveAsync(item, ct);
             if (item.Mode != PlaybackMode.Transcode || item.Info is null)
                 return Results.BadRequest("Этот файл не раздаётся через HLS.");
-            if (track < 0 || track >= item.Info.AudioTracks.Count) return Results.NotFound();
+            if (track < 0 || track >= item.AudioTracks.Count) return Results.NotFound();
 
             return Results.Text(transcoder.BuildAudioPlaylist(item.Info, track), "application/vnd.apple.mpegurl");
         });
@@ -262,7 +262,7 @@ public static class PrismHostApp
                 http.Response.StatusCode = 400;
                 return;
             }
-            if (track < 0 || track >= item.Info.AudioTracks.Count ||
+            if (track < 0 || track >= item.AudioTracks.Count ||
                 index < 0 || index >= transcoder.SegmentCount(item.Info))
             {
                 http.Response.StatusCode = 404;
@@ -367,9 +367,10 @@ public static class PrismHostApp
         ["videoCodec"] = it.Info?.VideoCodec,
         ["audioCodec"] = it.Info?.AudioCodec,
         ["audioChannels"] = it.Info?.AudioChannels ?? 0,
-        ["audioTracks"] = (it.Info?.AudioTracks ?? []).Select(x => new
+        ["audioTracks"] = it.AudioTracks.Select(x => new
         {
             index = x.Index, codec = x.Codec, language = x.Language, title = x.Title, channels = x.Channels,
+            external = x.Path is not null,
         }),
         ["subtitleTracks"] = it.SubtitleTracks.Select(x => new
         {

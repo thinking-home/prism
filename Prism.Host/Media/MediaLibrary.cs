@@ -34,6 +34,44 @@ public sealed class MediaItem
     /// Обновляются при каждом скане, поэтому подложенный файл виден без перезапуска.</summary>
     public IReadOnlyList<string> ExternalSubtitleFiles { get; set; } = [];
 
+    /// <summary>Аудиофайлы, лежащие рядом с видео (например, отдельная озвучка).</summary>
+    public IReadOnlyList<string> ExternalAudioFiles { get; set; } = [];
+
+    /// <summary>Разбор внешних аудиофайлов (путь → кодек/каналы/язык), заполняется
+    /// библиотекой лениво: без него не выбрать правильный даунмикс 5.1 → стерео.</summary>
+    public IReadOnlyDictionary<string, AudioTrack> ExternalAudioInfo { get; set; } =
+        new Dictionary<string, AudioTrack>();
+
+    /// <summary>
+    /// Все аудиодорожки файла: вшитые (из ffprobe) и внешние файлы, дописанные в
+    /// конец — номера вшитых от этого не меняются.
+    /// </summary>
+    public IReadOnlyList<AudioTrack> AudioTracks
+    {
+        get
+        {
+            var embedded = Info?.AudioTracks ?? [];
+            if (ExternalAudioFiles.Count == 0) return embedded;
+
+            var all = new List<AudioTrack>(embedded);
+            foreach (var file in ExternalAudioFiles)
+            {
+                var suffix = ExternalSuffix(file);
+                // Кодек и каналы — из разбора файла, пока он не разобран, показываем
+                // расширение; на воспроизведение это не влияет.
+                ExternalAudioInfo.TryGetValue(file, out var probed);
+                all.Add(new AudioTrack(
+                    all.Count,
+                    probed?.Codec ?? System.IO.Path.GetExtension(file).TrimStart('.').ToLowerInvariant(),
+                    ExternalLanguage(suffix, probed?.Language),
+                    suffix.Length > 0 ? suffix : null,
+                    probed?.Channels ?? 0,
+                    Path: file));
+            }
+            return all;
+        }
+    }
+
     /// <summary>
     /// Все дорожки субтитров файла: вшитые (из ffprobe) и внешние файлы, дописанные
     /// в конец — номера вшитых от этого не меняются.
@@ -48,15 +86,11 @@ public sealed class MediaItem
             var all = new List<SubtitleTrack>(embedded);
             foreach (var file in ExternalSubtitleFiles)
             {
-                // Подпись и язык — из «хвоста» имени: Movie.ru.srt → «ru»,
-                // Movie.rus.forced.srt → «rus.forced» с языком «rus».
                 var suffix = ExternalSuffix(file);
-                var language = suffix.Split('.')
-                    .FirstOrDefault(t => t.Length is 2 or 3 && t.All(char.IsLetter));
                 all.Add(new SubtitleTrack(
                     all.Count,
                     System.IO.Path.GetExtension(file).TrimStart('.').ToLowerInvariant(),
-                    language,
+                    ExternalLanguage(suffix, null),
                     suffix.Length > 0 ? suffix : null,
                     TextBased: true,
                     Path: file));
@@ -66,6 +100,19 @@ public sealed class MediaItem
     }
 
     public string DisplayName => System.IO.Path.GetFileNameWithoutExtension(FileName);
+
+    /// <summary>
+    /// Язык внешней дорожки. Хвост имени — всегда подпись дорожки, поэтому язык
+    /// проставляется, только когда хвост целиком является кодом языка (или его нет
+    /// вовсе — тогда берём язык из самого файла). Иначе плееры (ExoPlayer) показывают
+    /// в меню название языка ВМЕСТО подписи, и «Дубляж Мосфильм» из имени файла
+    /// пользователь не увидит.
+    /// </summary>
+    private static string? ExternalLanguage(string suffix, string? probed)
+    {
+        if (suffix.Length == 0) return probed;
+        return suffix.Length is 2 or 3 && suffix.All(char.IsLetter) ? suffix : null;
+    }
 
     // Остаток имени файла-компаньона после имени видео (без расширений).
     private string ExternalSuffix(string file)
@@ -96,11 +143,17 @@ public sealed class MediaLibrary
     // .idx/.sub) не берём — их нельзя перевести в текст (нужен прожиг).
     private static readonly string[] SubtitleExtensions = [".srt", ".ass", ".ssa", ".vtt"];
 
+    // Отдельные аудиодорожки рядом с видео (например, русская озвучка к фильму).
+    private static readonly string[] AudioExtensions =
+        [".mka", ".m4a", ".aac", ".ac3", ".eac3", ".dts", ".flac", ".mp3", ".opus", ".ogg", ".wav"];
+
     private readonly MediaProbe _probe;
     private readonly FFTools _tools;
     private readonly ILogger<MediaLibrary> _logger;
     private readonly ConcurrentDictionary<string, MediaItem> _byId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _resolveLocks = new();
+    // Разбор внешних аудиофайлов: один ffprobe на файл за всё время работы.
+    private readonly ConcurrentDictionary<string, Lazy<Task<AudioTrack?>>> _externalAudio = new();
 
     // Персистентный кэш отпечатков: путь → (размер, mtime, хеш) + «последний
     // известный путь» каждого id — по нему ремап находит, куда переехали записи
@@ -154,26 +207,19 @@ public sealed class MediaLibrary
         foreach (var dir in MediaDirectories)
         {
             List<string> files;
-            // Файлы-компаньоны (субтитры) по папкам — заполняются тем же проходом,
-            // что и список видео, поэтому их обнаружение не стоит лишнего I/O.
-            var companions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            // Файлы-компаньоны (субтитры и аудио) по папкам — заполняются тем же
+            // проходом, что и список видео, поэтому обнаружение не стоит лишнего I/O.
+            var subs = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var audios = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 files = [];
                 foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
                 {
                     var ext = Path.GetExtension(file).ToLowerInvariant();
-                    if (Extensions.Contains(ext))
-                    {
-                        files.Add(file);
-                    }
-                    else if (SubtitleExtensions.Contains(ext))
-                    {
-                        var folder = Path.GetDirectoryName(file) ?? dir;
-                        if (!companions.TryGetValue(folder, out var list))
-                            companions[folder] = list = [];
-                        list.Add(file);
-                    }
+                    if (Extensions.Contains(ext)) files.Add(file);
+                    else if (SubtitleExtensions.Contains(ext)) Bucket(subs, file, dir);
+                    else if (AudioExtensions.Contains(ext)) Bucket(audios, file, dir);
                 }
                 files.Sort(StringComparer.OrdinalIgnoreCase);
             }
@@ -203,7 +249,9 @@ public sealed class MediaLibrary
                     item.Path = file;
                     item.FileName = Path.GetFileName(file);
                 }
-                item.ExternalSubtitleFiles = MatchCompanions(companions, file);
+                item.ExternalSubtitleFiles = MatchCompanions(subs, file);
+                item.ExternalAudioFiles = MatchCompanions(audios, file);
+                ApplyExternalAudioMode(item);
                 found.Add(item);
             }
         }
@@ -213,6 +261,22 @@ public sealed class MediaLibrary
     }
 
     public MediaItem? Get(string id) => _byId.TryGetValue(id, out var item) ? item : null;
+
+    private static void Bucket(Dictionary<string, List<string>> byFolder, string file, string fallbackDir)
+    {
+        var folder = Path.GetDirectoryName(file) ?? fallbackDir;
+        if (!byFolder.TryGetValue(folder, out var list))
+            byFolder[folder] = list = [];
+        list.Add(file);
+    }
+
+    // Альтернативное аудио возможно только в HLS (рендиции), поэтому файл с внешней
+    // звуковой дорожкой раздаётся через HLS, даже если сам по себе браузерный.
+    private void ApplyExternalAudioMode(MediaItem item)
+    {
+        if (item.Mode == PlaybackMode.Direct && item.ExternalAudioFiles.Count > 0 && _tools.Available)
+            item.Mode = PlaybackMode.Transcode;
+    }
 
     // Компаньоны видеофайла: лежат в той же папке, имя начинается с имени видео
     // (Movie.mkv → Movie.srt, Movie.ru.srt). Порядок стабилен — от него зависят
@@ -315,7 +379,11 @@ public sealed class MediaLibrary
     public async Task<MediaItem> ResolveAsync(MediaItem item, CancellationToken ct = default)
     {
         if (item.Info is not null)
+        {
+            // Файл уже разобран, но рядом мог появиться новый внешний аудиофайл.
+            await ProbeExternalAudioAsync(item);
             return item;
+        }
 
         // Сериализуем определение режима по каждому файлу, чтобы параллельные
         // запросы не запускали несколько ffprobe и не перетирали результат друг друга.
@@ -326,12 +394,35 @@ public sealed class MediaLibrary
             if (item.Info is not null)
                 return item; // другой запрос успел определить режим, пока мы ждали
             await ResolveCoreAsync(item);
+            await ProbeExternalAudioAsync(item);
+            ApplyExternalAudioMode(item);
             return item;
         }
         finally
         {
             sem.Release();
         }
+    }
+
+    // Разбирает внешние аудиофайлы (кодек/каналы/язык) — по одному ffprobe на файл,
+    // с кэшем: без каналов не выбрать правильный даунмикс 5.1 → стерео.
+    private async Task ProbeExternalAudioAsync(MediaItem item)
+    {
+        if (item.ExternalAudioFiles.Count == 0) return;
+        if (item.ExternalAudioInfo.Count == item.ExternalAudioFiles.Count &&
+            item.ExternalAudioFiles.All(item.ExternalAudioInfo.ContainsKey))
+            return; // всё уже разобрано
+
+        var map = new Dictionary<string, AudioTrack>();
+        foreach (var file in item.ExternalAudioFiles)
+        {
+            var track = await _externalAudio
+                .GetOrAdd(file, p => new Lazy<Task<AudioTrack?>>(async () =>
+                    (await _probe.ProbeAsync(p, CancellationToken.None))?.AudioTracks.FirstOrDefault()))
+                .Value;
+            if (track is not null) map[file] = track;
+        }
+        item.ExternalAudioInfo = map;
     }
 
     private async Task ResolveCoreAsync(MediaItem item)

@@ -79,11 +79,13 @@ public sealed class HlsTranscoder : IAsyncDisposable
         sb.Append("#EXTM3U\n");
         sb.Append("#EXT-X-VERSION:4\n");
 
-        var hasAudio = info.HasAudio && info.AudioTracks.Count > 0;
+        // Вшитые + внешние аудиофайлы рядом с видео.
+        var audioTracks = item.AudioTracks;
+        var hasAudio = audioTracks.Count > 0;
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; hasAudio && i < info.AudioTracks.Count; i++)
+        for (var i = 0; i < audioTracks.Count; i++)
         {
-            var t = info.AudioTracks[i];
+            var t = audioTracks[i];
             sb.Append("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\"");
             sb.Append($",NAME=\"{RenditionName(t.Title, t.Language, "Audio", i, names)}\"");
             if (!string.IsNullOrWhiteSpace(t.Language)) sb.Append($",LANGUAGE=\"{t.Language.Replace('"', '\'')}\"");
@@ -365,10 +367,14 @@ public sealed class HlsTranscoder : IAsyncDisposable
             a.Add(_options.BufferBurstSeconds.ToString(CultureInfo.InvariantCulture));
         }
 
+        // Для внешней аудиодорожки входом служит её файл рядом с видео (считаем, что
+        // он синхронен с видео); для остального — сам видеофайл.
+        var audioTrack = audio is int index && index < item.AudioTracks.Count ? item.AudioTracks[index] : null;
+
         // Быстрая перемотка к началу сессии + ограничение её длительности.
         a.Add("-ss"); a.Add(start.ToString("0.000", CultureInfo.InvariantCulture));
         a.Add("-t"); a.Add(duration.ToString("0.000", CultureInfo.InvariantCulture));
-        a.Add("-i"); a.Add(item.Path);
+        a.Add("-i"); a.Add(audioTrack?.Path ?? item.Path);
 
         if (audio is null)
         {
@@ -390,9 +396,10 @@ public sealed class HlsTranscoder : IAsyncDisposable
             // такая сессия почти бесплатна по CPU. Границы сегментов у аудио режутся
             // муксером по кадрам AAC (~6 с, не тик-в-тик с видео) — плееры сводят
             // потоки по таймстемпам, точного совпадения не требуется.
-            a.Add("-map"); a.Add($"0:a:{audio.Value}");
-            var track = audio.Value < info.AudioTracks.Count ? info.AudioTracks[audio.Value] : null;
-            AddAudioArgs(a, hasAudio: true, track?.Channels ?? info.AudioChannels, audioEncoder);
+            // Вшитые дорожки идут первыми, поэтому их номер в общем списке совпадает
+            // с номером потока; у внешнего файла берём его единственную дорожку.
+            a.Add("-map"); a.Add(audioTrack?.Path is null ? $"0:a:{audio.Value}" : "0:a:0");
+            AddAudioArgs(a, hasAudio: true, audioTrack?.Channels ?? info.AudioChannels, audioEncoder);
         }
 
         // Глобальные таймстемпы: смещаем выход на позицию сессии, чтобы сегменты всех
