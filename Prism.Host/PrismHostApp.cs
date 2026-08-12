@@ -199,7 +199,27 @@ public static class PrismHostApp
                 !item.Info.SubtitleTracks[track].TextBased)
                 return Results.NotFound();
 
-            return Results.Text(transcoder.BuildSubtitlePlaylist(item.Info, id, track), "application/vnd.apple.mpegurl");
+            return Results.Text(transcoder.BuildSubtitlePlaylist(item.Info, track), "application/vnd.apple.mpegurl");
+        });
+
+        // ---- HLS: WebVTT-сегмент дорожки субтитров ------------------------------
+        app.MapGet("/hls/{id}/subs/{track:int}/{index:int}.vtt", async (string id, int track, int index, CancellationToken ct) =>
+        {
+            library.Scan();
+            var item = library.Get(id);
+            if (item is null) return Results.NotFound();
+            await library.ResolveAsync(item, ct);
+            if (item.Mode != PlaybackMode.Transcode || item.Info is null)
+                return Results.BadRequest("Этот файл не раздаётся через HLS.");
+            if (track < 0 || track >= item.Info.SubtitleTracks.Count ||
+                !item.Info.SubtitleTracks[track].TextBased ||
+                index < 0 || index >= transcoder.SegmentCount(item.Info))
+                return Results.NotFound();
+
+            var vtt = await subtitles.GetVttSegmentAsync(item, track, transcoder.SegmentLengthSeconds, index);
+            return vtt is null
+                ? Results.NotFound("Субтитры недоступны (не текстовые или ошибка извлечения).")
+                : Results.Text(vtt, "text/vtt; charset=utf-8");
         });
 
         // ---- HLS: видеосегмент (транскодирование на лету) -----------------------

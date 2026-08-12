@@ -1,13 +1,14 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 
 namespace Prism.Host.Media;
 
 /// <summary>
 /// Извлекает выбранную текстовую дорожку субтитров в WebVTT (по запросу, с
-/// кэшированием во временный файл). Графические субтитры (PGS/VOBSUB/DVB) не
-/// поддерживаются — их нельзя сконвертировать в текст.
+/// кэшированием во временный файл) и нарезает её на HLS-сегменты. Графические
+/// субтитры (PGS/VOBSUB/DVB) не поддерживаются — их нельзя сконвертировать в текст.
 /// </summary>
 public sealed class SubtitleService
 {
@@ -15,6 +16,11 @@ public sealed class SubtitleService
     private readonly ILogger<SubtitleService> _logger;
     private readonly string _dir;
     private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _cache = new();
+    // Разобранные реплики дорожки — для нарезки на сегменты.
+    private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<Cue>?>>> _cues = new();
+
+    /// <summary>Одна реплика: границы по времени и блок WebVTT дословно.</summary>
+    private sealed record Cue(double StartSec, double EndSec, string Block);
 
     public SubtitleService(FFTools tools, ILogger<SubtitleService> logger)
     {
@@ -78,6 +84,99 @@ public sealed class SubtitleService
         }
 
         return Fail(key);
+    }
+
+    /// <summary>
+    /// WebVTT-сегмент дорожки для HLS: реплики, пересекающие окно сегмента
+    /// <paramref name="index"/>, с заголовком <c>X-TIMESTAMP-MAP</c> — без него
+    /// ExoPlayer не привязывает реплики к шкале времени и не показывает их.
+    /// Времена реплик — глобальные (шкала фильма), как и PTS сегментов видео,
+    /// поэтому отображение MPEGTS:0 ↔ LOCAL:0. null — дорожку нельзя извлечь.
+    /// </summary>
+    public async Task<string?> GetVttSegmentAsync(MediaItem item, int subIndex, double segmentSeconds, int index)
+    {
+        var key = $"{item.Id}-{subIndex}";
+        var cues = await _cues.GetOrAdd(key,
+            _ => new Lazy<Task<IReadOnlyList<Cue>?>>(() => ParseTrackAsync(item, subIndex, key))).Value;
+        if (cues is null) return null;
+
+        var from = index * segmentSeconds;
+        var to = from + segmentSeconds;
+
+        var sb = new StringBuilder();
+        sb.Append("WEBVTT\n");
+        sb.Append("X-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000\n");
+        foreach (var cue in cues)
+        {
+            // Реплика, пересекающая границу, попадает в оба сегмента — плееры
+            // склеивают её по совпадающим временам, это штатно для HLS.
+            if (cue.EndSec <= from || cue.StartSec >= to) continue;
+            sb.Append('\n').Append(cue.Block).Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    private async Task<IReadOnlyList<Cue>?> ParseTrackAsync(MediaItem item, int subIndex, string cacheKey)
+    {
+        var path = await GetVttPathAsync(item, subIndex);
+        if (path is null)
+        {
+            _cues.TryRemove(cacheKey, out _); // неуспех не кэшируем — можно повторить
+            return null;
+        }
+
+        try
+        {
+            return ParseCues(await File.ReadAllTextAsync(path));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Не удалось разобрать WebVTT дорожки {idx} из {file}", subIndex, item.FileName);
+            _cues.TryRemove(cacheKey, out _);
+            return null;
+        }
+    }
+
+    // Простой разбор WebVTT: блоки разделены пустой строкой; репликой считается
+    // блок со строкой таймингов «start --> end» (заголовок WEBVTT, NOTE и STYLE
+    // пропускаются). Блок сохраняется дословно — настройки позиций не теряются.
+    private static List<Cue> ParseCues(string vtt)
+    {
+        var cues = new List<Cue>();
+        foreach (var raw in vtt.Replace("\r\n", "\n").Split("\n\n", StringSplitOptions.RemoveEmptyEntries))
+        {
+            var block = raw.Trim('\n');
+            var lines = block.Split('\n');
+            var timing = Array.FindIndex(lines, l => l.Contains("-->"));
+            if (timing < 0) continue;
+
+            var parts = lines[timing].Split("-->", 2);
+            if (parts.Length < 2 ||
+                !TryParseTime(parts[0], out var start) || !TryParseTime(parts[1], out var end))
+                continue;
+
+            cues.Add(new Cue(start, end, block));
+        }
+        return cues;
+    }
+
+    // «HH:MM:SS.mmm» или «MM:SS.mmm»; после времени могут идти настройки реплики.
+    private static bool TryParseTime(string text, out double seconds)
+    {
+        seconds = 0;
+        var token = text.Trim().Split(' ', 2)[0];
+        var parts = token.Split(':');
+        if (parts.Length is < 2 or > 3) return false;
+
+        double result = 0;
+        foreach (var part in parts)
+        {
+            if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                return false;
+            result = result * 60 + value;
+        }
+        seconds = result;
+        return true;
     }
 
     // Неуспех не кэшируем навсегда — убираем запись, чтобы можно было повторить.

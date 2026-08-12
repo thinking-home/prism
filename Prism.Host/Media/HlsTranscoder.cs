@@ -121,24 +121,15 @@ public sealed class HlsTranscoder : IAsyncDisposable
         BuildMediaPlaylist(info, i => $"{track}/{i}.ts");
 
     /// <summary>
-    /// Плейлист-обёртка дорожки субтитров: один WebVTT-«сегмент» на весь фильм,
-    /// ссылающийся на готовый /api/media/{id}/subtitle/N.vtt (путь от корня, чтобы
-    /// не зависеть от вложенности URL самого плейлиста).
+    /// Строит VOD-плейлист дорожки субтитров: WebVTT-сегменты той же сетки, что и
+    /// видео/аудио (URI относительно /hls/{id}/subs/). Каждый сегмент несёт
+    /// X-TIMESTAMP-MAP — это требование ExoPlayer для субтитров в HLS.
     /// </summary>
-    public string BuildSubtitlePlaylist(MediaInfo info, string mediaId, int track)
-    {
-        var dur = Math.Max(1.0, info.DurationSeconds);
-        var sb = new StringBuilder();
-        sb.Append("#EXTM3U\n");
-        sb.Append("#EXT-X-VERSION:4\n");
-        sb.Append(CultureInfo.InvariantCulture, $"#EXT-X-TARGETDURATION:{(int)Math.Ceiling(dur)}\n");
-        sb.Append("#EXT-X-MEDIA-SEQUENCE:0\n");
-        sb.Append("#EXT-X-PLAYLIST-TYPE:VOD\n");
-        sb.Append(CultureInfo.InvariantCulture, $"#EXTINF:{dur.ToString("0.000", CultureInfo.InvariantCulture)},\n");
-        sb.Append(CultureInfo.InvariantCulture, $"/api/media/{mediaId}/subtitle/{track}.vtt\n");
-        sb.Append("#EXT-X-ENDLIST\n");
-        return sb.ToString();
-    }
+    public string BuildSubtitlePlaylist(MediaInfo info, int track) =>
+        BuildMediaPlaylist(info, i => $"{track}/{i}.vtt");
+
+    /// <summary>Длина HLS-сегмента в секундах (общая сетка всех дорожек).</summary>
+    public double SegmentLengthSeconds => SegmentLength;
 
     private string BuildMediaPlaylist(MediaInfo info, Func<int, string> segmentUri)
     {
