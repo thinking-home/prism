@@ -46,6 +46,10 @@ public static class PrismHostApp
 
         if (player.MediaDirectories.Length == 0)
             player.MediaDirectories = [PlayerOptions.DefaultMediaDirectory];
+        if (player.SubtitleFiles.Length == 0)
+            player.SubtitleFiles = [PlayerOptions.DefaultTrackFile];
+        if (player.AudioFiles.Length == 0)
+            player.AudioFiles = [PlayerOptions.DefaultTrackFile];
 
         // Относительные папки с медиа разрешаем относительно корня приложения, чтобы
         // использовалась одна и та же папка "videos" независимо от рабочего каталога shell.

@@ -17,6 +17,20 @@ public sealed class PlayerOptions
     /// <summary>Папка, которая используется, если ни конфиг, ни командная строка их не задали.</summary>
     public const string DefaultMediaDirectory = "videos";
 
+    /// <summary>
+    /// Где искать файлы субтитров рядом с видео: шаблоны пути относительно папки
+    /// видеофайла, <c>{name}</c> — имя видео без расширения (например
+    /// <c>"{name}"</c> или <c>"subs/{name}"</c>). Часть имени после шаблона
+    /// становится подписью дорожки. Пусто — <see cref="DefaultTrackFile"/>.
+    /// </summary>
+    public string[] SubtitleFiles { get; set; } = [];
+
+    /// <summary>Где искать отдельные аудиодорожки; синтаксис как у <see cref="SubtitleFiles"/>.</summary>
+    public string[] AudioFiles { get; set; } = [];
+
+    /// <summary>Шаблон по умолчанию: файл рядом с видео, имя начинается с его имени.</summary>
+    public const string DefaultTrackFile = "{name}";
+
     /// <summary>Явный путь к бинарю ffmpeg. Пусто — автоопределение.</summary>
     public string? FfmpegPath { get; set; }
 
