@@ -156,7 +156,7 @@ public static class PrismHostApp
             if (item.Mode != PlaybackMode.Transcode || item.Info is null)
                 return Results.BadRequest("Этот файл не раздаётся через HLS.");
 
-            return Results.Text(transcoder.BuildMasterPlaylist(item.Info), "application/vnd.apple.mpegurl");
+            return Results.Text(transcoder.BuildMasterPlaylist(item), "application/vnd.apple.mpegurl");
         });
 
         // ---- HLS: медиа-плейлист видео ------------------------------------------
@@ -195,8 +195,8 @@ public static class PrismHostApp
             await library.ResolveAsync(item, ct);
             if (item.Mode != PlaybackMode.Transcode || item.Info is null)
                 return Results.BadRequest("Этот файл не раздаётся через HLS.");
-            if (track < 0 || track >= item.Info.SubtitleTracks.Count ||
-                !item.Info.SubtitleTracks[track].TextBased)
+            if (track < 0 || track >= item.SubtitleTracks.Count ||
+                !item.SubtitleTracks[track].TextBased)
                 return Results.NotFound();
 
             return Results.Text(transcoder.BuildSubtitlePlaylist(item.Info, track), "application/vnd.apple.mpegurl");
@@ -211,8 +211,8 @@ public static class PrismHostApp
             await library.ResolveAsync(item, ct);
             if (item.Mode != PlaybackMode.Transcode || item.Info is null)
                 return Results.BadRequest("Этот файл не раздаётся через HLS.");
-            if (track < 0 || track >= item.Info.SubtitleTracks.Count ||
-                !item.Info.SubtitleTracks[track].TextBased ||
+            if (track < 0 || track >= item.SubtitleTracks.Count ||
+                !item.SubtitleTracks[track].TextBased ||
                 index < 0 || index >= transcoder.SegmentCount(item.Info))
                 return Results.NotFound();
 
@@ -371,9 +371,10 @@ public static class PrismHostApp
         {
             index = x.Index, codec = x.Codec, language = x.Language, title = x.Title, channels = x.Channels,
         }),
-        ["subtitleTracks"] = (it.Info?.SubtitleTracks ?? []).Select(x => new
+        ["subtitleTracks"] = it.SubtitleTracks.Select(x => new
         {
             index = x.Index, codec = x.Codec, language = x.Language, title = x.Title, textBased = x.TextBased,
+            external = x.Path is not null,
         }),
         ["statusMessage"] = it.StatusMessage,
     };

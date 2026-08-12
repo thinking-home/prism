@@ -40,12 +40,13 @@ public sealed class SubtitleService
 
     private async Task<string?> ExtractAsync(MediaItem item, int subIndex, string key)
     {
-        var info = item.Info;
-        if (_tools.FfmpegPath is null || info is null ||
-            subIndex < 0 || subIndex >= info.SubtitleTracks.Count ||
-            !info.SubtitleTracks[subIndex].TextBased)
+        var tracks = item.SubtitleTracks;
+        if (_tools.FfmpegPath is null ||
+            subIndex < 0 || subIndex >= tracks.Count ||
+            !tracks[subIndex].TextBased)
             return Fail(key);
 
+        var track = tracks[subIndex];
         var outPath = Path.Combine(_dir, key + ".vtt");
 
         var psi = new ProcessStartInfo(_tools.FfmpegPath)
@@ -56,8 +57,22 @@ public sealed class SubtitleService
         var a = psi.ArgumentList;
         a.Add("-nostdin"); a.Add("-hide_banner"); a.Add("-loglevel"); a.Add("error");
         a.Add("-y");
-        a.Add("-i"); a.Add(item.Path);
-        a.Add("-map"); a.Add($"0:s:{subIndex}");
+        if (track.Path is null)
+        {
+            // Дорожка вшита в контейнер: вшитые идут первыми, поэтому номер в общем
+            // списке совпадает с номером потока субтитров.
+            a.Add("-i"); a.Add(item.Path);
+            a.Add("-map"); a.Add($"0:s:{subIndex}");
+        }
+        else
+        {
+            // Отдельный файл рядом с видео. Русские .srt часто в CP1251 — если файл
+            // не является валидным UTF-8, подсказываем ffmpeg кодировку (иначе
+            // получим кракозябры). Опция относится к входу, поэтому идёт до -i.
+            if (!IsUtf8(track.Path)) { a.Add("-sub_charenc"); a.Add("CP1251"); }
+            a.Add("-i"); a.Add(track.Path);
+            a.Add("-map"); a.Add("0:s:0");
+        }
         a.Add("-f"); a.Add("webvtt");
         a.Add(outPath);
 
@@ -177,6 +192,24 @@ public sealed class SubtitleService
         }
         seconds = result;
         return true;
+    }
+
+    // Является ли файл валидным UTF-8 (иначе считаем его однобайтовой кириллицей).
+    private static bool IsUtf8(string path)
+    {
+        try
+        {
+            new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(File.ReadAllBytes(path));
+            return true;
+        }
+        catch (DecoderFallbackException)
+        {
+            return false;
+        }
+        catch
+        {
+            return true; // файл не прочитался — пусть решает ffmpeg
+        }
     }
 
     // Неуспех не кэшируем навсегда — убираем запись, чтобы можно было повторить.

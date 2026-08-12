@@ -30,7 +30,54 @@ public sealed class MediaItem
     public PlaybackMode Mode { get; set; }
     public string? StatusMessage { get; set; }
 
+    /// <summary>Файлы субтитров, лежащие рядом с видео (см. <see cref="MediaLibrary.Scan"/>).
+    /// Обновляются при каждом скане, поэтому подложенный файл виден без перезапуска.</summary>
+    public IReadOnlyList<string> ExternalSubtitleFiles { get; set; } = [];
+
+    /// <summary>
+    /// Все дорожки субтитров файла: вшитые (из ffprobe) и внешние файлы, дописанные
+    /// в конец — номера вшитых от этого не меняются.
+    /// </summary>
+    public IReadOnlyList<SubtitleTrack> SubtitleTracks
+    {
+        get
+        {
+            var embedded = Info?.SubtitleTracks ?? [];
+            if (ExternalSubtitleFiles.Count == 0) return embedded;
+
+            var all = new List<SubtitleTrack>(embedded);
+            foreach (var file in ExternalSubtitleFiles)
+            {
+                // Подпись и язык — из «хвоста» имени: Movie.ru.srt → «ru»,
+                // Movie.rus.forced.srt → «rus.forced» с языком «rus».
+                var suffix = ExternalSuffix(file);
+                var language = suffix.Split('.')
+                    .FirstOrDefault(t => t.Length is 2 or 3 && t.All(char.IsLetter));
+                all.Add(new SubtitleTrack(
+                    all.Count,
+                    System.IO.Path.GetExtension(file).TrimStart('.').ToLowerInvariant(),
+                    language,
+                    suffix.Length > 0 ? suffix : null,
+                    TextBased: true,
+                    Path: file));
+            }
+            return all;
+        }
+    }
+
     public string DisplayName => System.IO.Path.GetFileNameWithoutExtension(FileName);
+
+    // Остаток имени файла-компаньона после имени видео (без расширений).
+    private string ExternalSuffix(string file)
+    {
+        var baseName = System.IO.Path.GetFileNameWithoutExtension(FileName);
+        var name = System.IO.Path.GetFileNameWithoutExtension(file);
+        // Имя файла ровно совпадает с именем видео (Movie.srt) — подписи нет.
+        var suffix = name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase)
+            ? name[baseName.Length..]
+            : name;
+        return suffix.Trim(' ', '.', '_', '-');
+    }
 }
 
 /// <summary>
@@ -44,6 +91,10 @@ public sealed class MediaLibrary
 {
     private static readonly string[] Extensions =
         [".mkv", ".mp4", ".mov", ".webm", ".avi", ".m4v", ".ts", ".flv", ".wmv", ".mpg", ".mpeg"];
+
+    // Текстовые субтитры отдельными файлами рядом с видео. Графические (.sup,
+    // .idx/.sub) не берём — их нельзя перевести в текст (нужен прожиг).
+    private static readonly string[] SubtitleExtensions = [".srt", ".ass", ".ssa", ".vtt"];
 
     private readonly MediaProbe _probe;
     private readonly FFTools _tools;
@@ -102,13 +153,29 @@ public sealed class MediaLibrary
 
         foreach (var dir in MediaDirectories)
         {
-            IEnumerable<string> files;
+            List<string> files;
+            // Файлы-компаньоны (субтитры) по папкам — заполняются тем же проходом,
+            // что и список видео, поэтому их обнаружение не стоит лишнего I/O.
+            var companions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                files = Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
-                    .Where(f => Extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                files = [];
+                foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                {
+                    var ext = Path.GetExtension(file).ToLowerInvariant();
+                    if (Extensions.Contains(ext))
+                    {
+                        files.Add(file);
+                    }
+                    else if (SubtitleExtensions.Contains(ext))
+                    {
+                        var folder = Path.GetDirectoryName(file) ?? dir;
+                        if (!companions.TryGetValue(folder, out var list))
+                            companions[folder] = list = [];
+                        list.Add(file);
+                    }
+                }
+                files.Sort(StringComparer.OrdinalIgnoreCase);
             }
             catch (Exception ex)
             {
@@ -136,6 +203,7 @@ public sealed class MediaLibrary
                     item.Path = file;
                     item.FileName = Path.GetFileName(file);
                 }
+                item.ExternalSubtitleFiles = MatchCompanions(companions, file);
                 found.Add(item);
             }
         }
@@ -145,6 +213,22 @@ public sealed class MediaLibrary
     }
 
     public MediaItem? Get(string id) => _byId.TryGetValue(id, out var item) ? item : null;
+
+    // Компаньоны видеофайла: лежат в той же папке, имя начинается с имени видео
+    // (Movie.mkv → Movie.srt, Movie.ru.srt). Порядок стабилен — от него зависят
+    // номера дорожек.
+    private static IReadOnlyList<string> MatchCompanions(Dictionary<string, List<string>> byFolder, string videoPath)
+    {
+        var folder = Path.GetDirectoryName(videoPath);
+        if (folder is null || !byFolder.TryGetValue(folder, out var candidates)) return [];
+
+        var baseName = Path.GetFileNameWithoutExtension(videoPath);
+        var matched = candidates
+            .Where(f => Path.GetFileNameWithoutExtension(f).StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return matched;
+    }
 
     /// <summary>
     /// Куда «переехало» содержимое: текущий id файла по последнему известному пути

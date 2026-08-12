@@ -72,8 +72,9 @@ public sealed class HlsTranscoder : IAsyncDisposable
     /// и текстовых субтитров (TYPE=SUBTITLES). Из него плееры (hls.js, ExoPlayer,
     /// Safari) узнают о дорожках и переключают их локально, без пересборки потока.
     /// </summary>
-    public string BuildMasterPlaylist(MediaInfo info)
+    public string BuildMasterPlaylist(MediaItem item)
     {
+        var info = item.Info!;
         var sb = new StringBuilder();
         sb.Append("#EXTM3U\n");
         sb.Append("#EXT-X-VERSION:4\n");
@@ -90,7 +91,8 @@ public sealed class HlsTranscoder : IAsyncDisposable
             sb.Append(CultureInfo.InvariantCulture, $",URI=\"audio/{t.Index}.m3u8\"\n");
         }
 
-        var textSubs = info.SubtitleTracks.Where(s => s.TextBased).ToArray();
+        // Вшитые + внешние файлы субтитров рядом с видео.
+        var textSubs = item.SubtitleTracks.Where(s => s.TextBased).ToArray();
         var subNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < textSubs.Length; i++)
         {

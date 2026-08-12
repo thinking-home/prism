@@ -4,10 +4,13 @@ namespace Prism.Host.Media;
 /// аудиопотоков (для ffmpeg <c>-map 0:a:Index</c>).</summary>
 public sealed record AudioTrack(int Index, string? Codec, string? Language, string? Title, int Channels);
 
-/// <summary>Дорожка субтитров. <see cref="Index"/> — порядковый номер среди
-/// субтитров (для <c>-map 0:s:Index</c>). <see cref="TextBased"/> — можно ли
-/// извлечь в WebVTT (текстовые), иначе это графические субтитры (PGS/VOBSUB).</summary>
-public sealed record SubtitleTrack(int Index, string? Codec, string? Language, string? Title, bool TextBased);
+/// <summary>Дорожка субтитров. <see cref="Index"/> — номер в общем списке дорожек
+/// файла (вшитые идут первыми, поэтому для них это же и номер потока —
+/// <c>-map 0:s:Index</c>). <see cref="TextBased"/> — можно ли извлечь в WebVTT
+/// (текстовые), иначе это графические субтитры (PGS/VOBSUB). <see cref="Path"/> —
+/// путь к отдельному файлу субтитров рядом с видео; null — дорожка вшита в контейнер.</summary>
+public sealed record SubtitleTrack(int Index, string? Codec, string? Language, string? Title, bool TextBased,
+    string? Path = null);
 
 /// <summary>Результат анализа медиафайла утилитой ffprobe.</summary>
 public sealed record MediaInfo
