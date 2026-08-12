@@ -1,13 +1,12 @@
 import { defineConfig } from "vitepress";
 
 // Сайт документации Prism. Собирается в статику и уезжает на GitHub Pages
-// (см. .github/workflows/docs.yml). Репозиторий — thinking-home/prism, поэтому
-// сайт живёт в подпути /prism/ и base обязателен.
+// (см. .github/workflows/docs.yml). Живёт в корне отдельного домена, поэтому
+// base не задаём — пути к ассетам абсолютные от корня.
 export default defineConfig({
   lang: "ru-RU",
   title: "Prism",
   description: "Сетевой медиа-плеер: сервер, веб-клиент и плеер для Android TV",
-  base: "/prism/",
   cleanUrls: true,
   lastUpdated: true,
 
