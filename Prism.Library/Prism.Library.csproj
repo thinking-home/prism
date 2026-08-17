@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Библиотека Prism (сервис): дерево групп, мета, правила автозаполнения,
+         агрегация хостов. Запускаемые обёртки — Prism.Library.Console (unix и
+         разработка) и Prism.Library.Service (служба Windows, позже). -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <!-- Те же неявные using, что Web SDK даёт исполняемым проектам. -->
+    <ItemGroup>
+        <Using Include="Microsoft.AspNetCore.Builder" />
+        <Using Include="Microsoft.AspNetCore.Hosting" />
+        <Using Include="Microsoft.AspNetCore.Http" />
+        <Using Include="Microsoft.AspNetCore.Routing" />
+        <Using Include="Microsoft.Extensions.Configuration" />
+        <Using Include="Microsoft.Extensions.DependencyInjection" />
+        <Using Include="Microsoft.Extensions.Hosting" />
+        <Using Include="Microsoft.Extensions.Logging" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Prism.Abstractions\Prism.Abstractions.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+        <PackageReference Include="ThinkingHome.Migrator" Version="3.10.0" />
+        <PackageReference Include="ThinkingHome.Migrator.Framework" Version="3.10.0" />
+        <PackageReference Include="ThinkingHome.Migrator.Providers.SQLite" Version="3.10.0" />
+        <PackageReference Include="ThinkingHome.Migrator.Providers.PostgreSQL" Version="3.10.0" />
+    </ItemGroup>
+
+</Project>

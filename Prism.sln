@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.37411.7 d17.14
+VisualStudioVersion = 17.14.37411.7
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Host", "Prism.Host\Prism.Host.csproj", "{3FD974F1-CD7C-4B37-98F5-CF3EA1A60A71}"
 EndProject
@@ -18,6 +18,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Common", "Prism.Common\Prism.Common.csproj", "{74C9799B-8CE4-4BFA-A9AB-3EA73A3502B2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Launcher", "Prism.Launcher\Prism.Launcher.csproj", "{487ABD68-8C3D-72C0-462C-4E9DFF216759}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Library", "Prism.Library\Prism.Library.csproj", "{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Library.Console", "Prism.Library.Console\Prism.Library.Console.csproj", "{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -122,6 +126,30 @@ Global
 		{487ABD68-8C3D-72C0-462C-4E9DFF216759}.Release|x64.Build.0 = Release|Any CPU
 		{487ABD68-8C3D-72C0-462C-4E9DFF216759}.Release|x86.ActiveCfg = Release|Any CPU
 		{487ABD68-8C3D-72C0-462C-4E9DFF216759}.Release|x86.Build.0 = Release|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Debug|x64.Build.0 = Debug|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Debug|x86.Build.0 = Debug|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Release|x64.ActiveCfg = Release|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Release|x64.Build.0 = Release|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Release|x86.ActiveCfg = Release|Any CPU
+		{3DFE7029-B05B-4BAB-961D-1F2D2F5BAB50}.Release|x86.Build.0 = Release|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Debug|x64.Build.0 = Debug|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Debug|x86.Build.0 = Debug|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|x64.ActiveCfg = Release|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|x64.Build.0 = Release|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|x86.ActiveCfg = Release|Any CPU
+		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

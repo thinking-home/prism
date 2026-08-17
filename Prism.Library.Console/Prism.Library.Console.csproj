@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <!-- Запуск сервиса библиотеки из консоли — штатный вариант для unix-систем
+         (и сценарий разработки). -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <InvariantGlobalization>true</InvariantGlobalization>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Prism.Library\Prism.Library.csproj" />
+    </ItemGroup>
+
+</Project>
