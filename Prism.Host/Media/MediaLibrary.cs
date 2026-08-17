@@ -6,6 +6,11 @@ namespace Prism.Host.Media;
 
 public enum PlaybackMode
 {
+    /// <summary>Файл ещё не разобран (ffprobe не выполнялся) — переходное состояние,
+    /// метаданные появятся после фоновой доразборки. Первый член enum — это же
+    /// значение по умолчанию у только что найденного файла.</summary>
+    Pending,
+
     /// <summary>Файл браузерный — отдаётся напрямую с поддержкой HTTP Range.</summary>
     Direct,
 
@@ -183,6 +188,11 @@ public sealed class MediaLibrary
         (_fingerprints, _lastPath) = LoadCache();
     }
 
+    /// <summary>Срабатывает в конце скана, если найден файл без метаданных, —
+    /// сигнал фоновой доразборке (<see cref="MediaResolveService"/>) проснуться,
+    /// не дожидаясь её таймера.</summary>
+    public event Action? PendingDiscovered;
+
     /// <summary>Повторно сканирует папки с медиа и возвращает текущий каталог.</summary>
     public IReadOnlyList<MediaItem> Scan()
     {
@@ -243,6 +253,13 @@ public sealed class MediaLibrary
         }
 
         SaveCacheIfDirty();
+        _infoCache.SaveIfDirty(); // пакетная выгрузка разборов, накопленных с прошлого скана
+
+        // Файлы без метаданных разберёт фоновый цикл — будим его, чтобы новый файл
+        // получил метаданные через секунды, а не по таймеру.
+        if (found.Any(i => i.Info is null))
+            PendingDiscovered?.Invoke();
+
         return found;
     }
 
@@ -384,6 +401,32 @@ public sealed class MediaLibrary
     }
 
     /// <summary>
+    /// Быстрый резолв без запуска инструментов: применяет разбор из персистентного
+    /// кэша, если он там есть; иначе файл остаётся неразобранным (Pending) до
+    /// фоновой доразборки. ffprobe здесь не запускается ни для видео, ни для
+    /// внешних аудиофайлов — поэтому список отвечает мгновенно.
+    /// </summary>
+    public async Task TryResolveFromCacheAsync(MediaItem item)
+    {
+        if (item.Info is not null) return;
+        var cached = _infoCache.TryGet(item.Id);
+        if (cached is null) return;
+
+        var sem = _resolveLocks.GetOrAdd(item.Id, _ => new SemaphoreSlim(1, 1));
+        if (!await sem.WaitAsync(0)) return; // файл уже резолвится параллельно — не ждём
+        try
+        {
+            if (item.Info is not null) return;
+            await ApplyInfoAsync(item, cached);
+            ApplyExternalAudioMode(item);
+        }
+        finally
+        {
+            sem.Release();
+        }
+    }
+
+    /// <summary>
     /// Лениво анализирует файл и определяет режим воспроизведения. Операция общая и
     /// одноразовая: результат кэшируется, повторные вызовы возвращают его сразу.
     /// </summary>
@@ -486,6 +529,14 @@ public sealed class MediaLibrary
             return;
         }
 
+        await ApplyInfoAsync(item, info);
+    }
+
+    // Выбирает режим воспроизведения по разбору и публикует его в записи. Режим
+    // зависит от окружения (наличие ffmpeg и декодера), поэтому вычисляется при
+    // каждом запуске заново, а не хранится в кэше вместе с разбором.
+    private async Task ApplyInfoAsync(MediaItem item, MediaInfo info)
+    {
         if (info.IsBrowserNative)
         {
             item.Mode = PlaybackMode.Direct;

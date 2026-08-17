@@ -65,6 +65,7 @@ public static class PrismHostApp
         builder.Services.AddSingleton<IMediaIdentity, MediaIdentity>();
         builder.Services.AddSingleton<HlsTranscoder>();
         builder.Services.AddSingleton<SubtitleService>();
+        builder.Services.AddHostedService<MediaResolveService>();
 
         // Плагины: список сборок из appsettings ("Plugins"). Без плагинов ядро работает
         // как обычно. Каждый модуль регистрирует свои сервисы и (ниже) эндпоинты.
@@ -116,7 +117,10 @@ public static class PrismHostApp
             var list = new List<Dictionary<string, object?>>();
             foreach (var it in items)
             {
-                await library.ResolveAsync(it, ct);
+                // Список не ждёт ffprobe: разбор применяется из персистентного кэша,
+                // неразобранные файлы отдаются в переходном состоянии ("pending")
+                // и дозаполняются фоновой доразборкой (MediaResolveService).
+                await library.TryResolveFromCacheAsync(it);
                 var dto = MediaDto(it);
                 list.Add(dto);
                 byId[it.Id] = dto;
@@ -357,9 +361,10 @@ public static class PrismHostApp
         {
             PlaybackMode.Transcode => "hls",
             PlaybackMode.Direct => "direct",
+            PlaybackMode.Pending => "pending",
             _ => "unsupported",
         },
-        ["playable"] = it.Mode != PlaybackMode.Unsupported,
+        ["playable"] = it.Mode is PlaybackMode.Transcode or PlaybackMode.Direct,
         ["streamUrl"] = it.Mode switch
         {
             PlaybackMode.Transcode => $"/hls/{it.Id}/playlist.m3u8",

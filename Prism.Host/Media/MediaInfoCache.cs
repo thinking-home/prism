@@ -27,11 +27,13 @@ public sealed class MediaInfoCache
 
     public MediaInfo? TryGet(string id) => _byId.TryGetValue(id, out var info) ? info : null;
 
+    /// <summary>Кладёт разбор в память, на диск НЕ пишет — сохранение пакетное:
+    /// <see cref="SaveIfDirty"/> вызывают скан и фоновая доразборка, чтобы холодное
+    /// заполнение большой библиотеки не переписывало файл после каждого ffprobe.</summary>
     public void Put(string id, MediaInfo info)
     {
         _byId[id] = info;
         _dirty = true;
-        SaveIfDirty();
     }
 
     private ConcurrentDictionary<string, MediaInfo> Load()
@@ -51,7 +53,7 @@ public sealed class MediaInfoCache
         return new();
     }
 
-    private void SaveIfDirty()
+    public void SaveIfDirty()
     {
         if (!_dirty) return;
         lock (_saveLock)
