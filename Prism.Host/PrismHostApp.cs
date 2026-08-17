@@ -155,6 +155,16 @@ public static class PrismHostApp
             return Results.Json(MediaDto(item));
         });
 
+        // ---- Преемник исчезнувшего содержимого ----------------------------------
+        // Для внешней библиотеки (ремап): если по последнему известному пути файла
+        // {id} теперь лежит другое содержимое (докачка/перезапись), отдаёт его
+        // текущий id. 404 — путь неизвестен, файла нет или содержимое прежнее.
+        app.MapGet("/api/media/{id}/successor", (string id) =>
+        {
+            var successor = library.FindSuccessor(id);
+            return successor is null ? Results.NotFound() : Results.Json(new { id = successor });
+        });
+
         // ---- HLS: master-плейлист (вариант видео + рендиции аудио/субтитров) ---
         app.MapGet("/hls/{id}/playlist.m3u8", async (string id, CancellationToken ct) =>
         {
@@ -357,6 +367,7 @@ public static class PrismHostApp
         ["id"] = it.Id,
         ["title"] = it.DisplayName,
         ["fileName"] = it.FileName,
+        ["relativePath"] = it.RelativePath,
         ["streamType"] = it.Mode switch
         {
             PlaybackMode.Transcode => "hls",

@@ -30,6 +30,16 @@ public sealed class MediaItem
     /// <summary>Текущий путь файла; обновляется при переезде содержимого.</summary>
     public required string Path { get; set; }
 
+    /// <summary>Путь относительно корня своей медиапапки, прямые слеши на всех ОС.
+    /// Единственный потребитель — правила автозаполнения библиотеки: их шаблоны
+    /// сопоставляются именно с этим путём (относительный он затем, чтобы правила
+    /// не зависели от расположения корня на конкретной машине и были одинаковы
+    /// для всех хостов). К правилам попадает двумя путями: внутрипроцессно через
+    /// IMediaIdentity.GetLiveFilesAsync (плагин) и полем relativePath в /api/media
+    /// (внешняя библиотека-сервис). Ремапу и стримингу не нужен — они работают
+    /// по id и абсолютному пути.</summary>
+    public required string RelativePath { get; set; }
+
     public required string FileName { get; set; }
     public MediaInfo? Info { get; set; }
     public PlaybackMode Mode { get; set; }
@@ -232,10 +242,12 @@ public sealed class MediaLibrary
                 if (id is null) continue; // нечитаемый/исчезающий файл — пропускаем
                 if (!seen.Add(id)) continue;
 
+                var relative = Path.GetRelativePath(dir, file).Replace('\\', '/');
                 var item = _byId.GetOrAdd(id, _ => new MediaItem
                 {
                     Id = id,
                     Path = file,
+                    RelativePath = relative,
                     FileName = Path.GetFileName(file),
                 });
                 if (item.Path != file)
@@ -243,6 +255,7 @@ public sealed class MediaLibrary
                     // Содержимое переехало (или первой нашлась другая копия) —
                     // id прежний, путь актуализируем.
                     item.Path = file;
+                    item.RelativePath = relative;
                     item.FileName = Path.GetFileName(file);
                 }
                 item.ExternalSubtitles = MatchTrackFiles(subs, file, _subtitleFiles);

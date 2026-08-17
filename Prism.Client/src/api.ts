@@ -34,6 +34,7 @@ export interface MediaItem {
   id: string;
   title: string;
   fileName: string;
+  relativePath: string;
   streamType: StreamType;
   playable: boolean;
   streamUrl: string | null;
