@@ -219,11 +219,20 @@ public static class LibraryEndpoints
             var deadItems = (await db.NodeItems.ToListAsync(ct)).Where(i => !live.Contains(i.FileKey)).ToList();
             var deadMeta = (await db.Meta.Where(m => m.EntityType == MetaEntity.File).ToListAsync(ct))
                 .Where(m => !live.Contains(m.EntityKey)).ToList();
+            // Бухгалтерия «id → хост» мёртвых файлов тоже забывается: gc — это
+            // явное «забыть эти файлы», после него преемника искать не для чего.
+            var deadHosts = (await db.FileHosts.ToListAsync(ct)).Where(r => !live.Contains(r.FileKey)).ToList();
 
             db.NodeItems.RemoveRange(deadItems);
             db.Meta.RemoveRange(deadMeta);
+            db.FileHosts.RemoveRange(deadHosts);
             await db.SaveChangesAsync(ct);
-            return Results.Json(new { removedItems = deadItems.Count, removedMeta = deadMeta.Count });
+            return Results.Json(new
+            {
+                removedItems = deadItems.Count,
+                removedMeta = deadMeta.Count,
+                removedHostLinks = deadHosts.Count,
+            });
         });
     }
 

@@ -48,9 +48,11 @@ public static class PrismLibraryApp
             else o.UseSqlite(connectionString);
         });
 
-        // Идентичность файлов. Пока — заглушка без файлов; HTTP-опрос хостов из
-        // конфига появится следующим шагом (п.14 TODO, шаг 2).
-        builder.Services.AddSingleton<IMediaIdentity, StubMediaIdentity>();
+        // Идентичность файлов — HTTP-опрос хостов Prism из конфига (секция "Hosts").
+        var hosts = builder.Configuration.GetSection("Hosts").Get<HostEntry[]>() ?? [];
+        builder.Services.AddHttpClient();
+        builder.Services.AddSingleton<IReadOnlyList<HostEntry>>(hosts);
+        builder.Services.AddSingleton<IMediaIdentity, HttpMediaIdentity>();
 
         // Фоновое обслуживание (ремап + правила) — как в плагине: синглтон +
         // hosted-обёртка, тот же экземпляр дёргает ручка /api/library/scan.
@@ -67,6 +69,8 @@ public static class PrismLibraryApp
         app.MapLibraryEndpoints();
 
         app.Logger.LogInformation("БД                : {provider}", provider);
+        app.Logger.LogInformation("Хосты             : {hosts}",
+            hosts.Length == 0 ? "(не настроены)" : string.Join("; ", hosts.Select(h => $"{h.Name} = {h.BaseUrl}")));
 
         try
         {

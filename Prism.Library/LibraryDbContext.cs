@@ -12,6 +12,7 @@ public class LibraryDbContext(DbContextOptions<LibraryDbContext> options) : DbCo
     public DbSet<LibraryNode> Nodes => Set<LibraryNode>();
     public DbSet<NodeItemRecord> NodeItems => Set<NodeItemRecord>();
     public DbSet<MetaRecord> Meta => Set<MetaRecord>();
+    public DbSet<FileHostRecord> FileHosts => Set<FileHostRecord>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -30,6 +31,11 @@ public class LibraryDbContext(DbContextOptions<LibraryDbContext> options) : DbCo
         {
             e.ToTable("Prism_Meta");
             e.HasKey(x => new { x.EntityType, x.EntityKey, x.Key });
+        });
+        b.Entity<FileHostRecord>(e =>
+        {
+            e.ToTable("Prism_FileHost");
+            e.HasKey(x => new { x.FileKey, x.Host });
         });
     }
 }
