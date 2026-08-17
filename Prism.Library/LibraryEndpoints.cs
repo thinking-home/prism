@@ -13,6 +13,44 @@ public static class LibraryEndpoints
 {
     public static void MapLibraryEndpoints(this IEndpointRouteBuilder app)
     {
+        // ---- Агрегированный каталог: слияние хостов + мета ------------------------
+        // DTO хостов отдаются как есть (абсолютные streamUrl, host/hostUrl —
+        // см. HostCatalog), сверху подмешивается мета из БД: ключи меты побеждают
+        // одноимённые поля хоста (например, title) — как было у плагина.
+        app.MapGet("/api/media",
+            async (HostCatalog catalog, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        {
+            var items = await catalog.GetMergedAsync(ct);
+
+            await using var db = await factory.CreateDbContextAsync(ct);
+            // Вся мета файлов одним запросом: библиотека домашняя, а фильтр по
+            // сотням id раздул бы SQL сильнее, чем таблица.
+            var meta = await db.Meta.Where(m => m.EntityType == MetaEntity.File).ToListAsync(ct);
+            var metaById = meta.ToLookup(m => m.EntityKey);
+            foreach (var item in items)
+                foreach (var m in metaById[item.Id])
+                    item.Dto[m.Key] = m.Value;
+
+            return Results.Json(items.Select(i => i.Dto));
+        });
+
+        // ---- Карточка одного файла (адресно через бухгалтерию «id → хост») -------
+        app.MapGet("/api/media/{id}",
+            async (string id, HostCatalog catalog, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        {
+            var dto = await catalog.GetItemAsync(id, ct);
+            if (dto is null) return Results.NotFound();
+
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var meta = await db.Meta
+                .Where(m => m.EntityType == MetaEntity.File && m.EntityKey == id)
+                .ToListAsync(ct);
+            foreach (var m in meta)
+                dto[m.Key] = m.Value;
+
+            return Results.Json(dto);
+        });
+
         // ---- Всё дерево одним запросом: группы (с метой) + членство --------------
         // Библиотека домашняя — пагинация не нужна, дерево строит клиент.
         // present=false — запись о файле, которого сейчас нет ни на одном доступном

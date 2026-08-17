@@ -48,10 +48,15 @@ public static class PrismLibraryApp
             else o.UseSqlite(connectionString);
         });
 
-        // Идентичность файлов — HTTP-опрос хостов Prism из конфига (секция "Hosts").
+        // Хосты Prism из конфига (секция "Hosts"): каталог — единственный
+        // опрашивающий компонент, бухгалтерия «id → хост» — общая память для
+        // адресных запросов (преемник, карточка), идентичность — контракт
+        // обслуживания поверх каталога.
         var hosts = builder.Configuration.GetSection("Hosts").Get<HostEntry[]>() ?? [];
         builder.Services.AddHttpClient();
         builder.Services.AddSingleton<IReadOnlyList<HostEntry>>(hosts);
+        builder.Services.AddSingleton<FileHostLedger>();
+        builder.Services.AddSingleton<HostCatalog>();
         builder.Services.AddSingleton<IMediaIdentity, HttpMediaIdentity>();
 
         // Фоновое обслуживание (ремап + правила) — как в плагине: синглтон +
