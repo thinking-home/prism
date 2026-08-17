@@ -128,6 +128,7 @@ public sealed class MediaLibrary
 
     private readonly MediaProbe _probe;
     private readonly FFTools _tools;
+    private readonly MediaInfoCache _infoCache;
     private readonly ILogger<MediaLibrary> _logger;
     // Шаблоны путей к файлам дорожек рядом с видео (из настроек).
     private readonly string[] _subtitleFiles;
@@ -153,10 +154,11 @@ public sealed class MediaLibrary
     public IReadOnlyList<string> MediaDirectories { get; }
 
     public MediaLibrary(PlayerOptions options, MediaProbe probe, FFTools tools,
-        IHostEnvironment env, ILogger<MediaLibrary> logger)
+        MediaInfoCache infoCache, IHostEnvironment env, ILogger<MediaLibrary> logger)
     {
         _probe = probe;
         _tools = tools;
+        _infoCache = infoCache;
         _logger = logger;
         _subtitleFiles = options.SubtitleFiles;
         _audioFiles = options.AudioFiles;
@@ -444,10 +446,20 @@ public sealed class MediaLibrary
             return;
         }
 
-        // ВАЖНО: анализ файла не привязан к токену конкретного HTTP-запроса.
-        // Прерванный запрос (например, при перемотке клиент отменяет загрузку
-        // сегментов) не должен отменять ffprobe и «отравлять» кэш режимом Unsupported.
-        var info = await _probe.ProbeAsync(item.Path, CancellationToken.None);
+        // Разбор мог сохраниться в персистентном кэше (ключ — отпечаток, он же id):
+        // тогда ffprobe не нужен вовсе — в том числе после рестарта хоста. Режим
+        // ниже вычисляется всегда: он зависит от окружения (наличие ffmpeg и
+        // декодера), а не только от содержимого файла.
+        var info = _infoCache.TryGet(item.Id);
+        if (info is null)
+        {
+            // ВАЖНО: анализ файла не привязан к токену конкретного HTTP-запроса.
+            // Прерванный запрос (например, при перемотке клиент отменяет загрузку
+            // сегментов) не должен отменять ffprobe и «отравлять» кэш режимом Unsupported.
+            info = await _probe.ProbeAsync(item.Path, CancellationToken.None);
+            if (info is not null)
+                _infoCache.Put(item.Id, info); // неудачу не кэшируем: ffprobe может появиться позже
+        }
 
         if (info is null)
         {

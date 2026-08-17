@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Prism.Host.Media;
 
 /// <summary>Аудиодорожка файла. <see cref="Index"/> — номер в общем списке дорожек
@@ -27,12 +29,15 @@ public sealed record MediaInfo
     public int AudioChannels { get; init; }
     public IReadOnlyList<AudioTrack> AudioTracks { get; init; } = [];
     public IReadOnlyList<SubtitleTrack> SubtitleTracks { get; init; } = [];
+    // Вычисляемые свойства не пишем в персистентный кэш (MediaInfoCache).
+    [JsonIgnore]
     public bool HasAudio => AudioCodec is not null;
 
     /// <summary>
     /// True, если браузер может воспроизвести файл как есть (без транскодирования):
     /// контейнер mp4/webm с браузерной комбинацией видео+аудио кодеков.
     /// </summary>
+    [JsonIgnore]
     public bool IsBrowserNative
     {
         get

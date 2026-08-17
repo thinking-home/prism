@@ -60,6 +60,7 @@ public static class PrismHostApp
         builder.Services.AddSingleton(player);
         builder.Services.AddSingleton<FFTools>();
         builder.Services.AddSingleton<MediaProbe>();
+        builder.Services.AddSingleton<MediaInfoCache>();
         builder.Services.AddSingleton<MediaLibrary>();
         builder.Services.AddSingleton<IMediaIdentity, MediaIdentity>();
         builder.Services.AddSingleton<HlsTranscoder>();
