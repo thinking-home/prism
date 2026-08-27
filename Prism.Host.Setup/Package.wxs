@@ -1,11 +1,13 @@
 <!-- Инсталлятор Prism Host: ставит службу (Prism.Host.Service) в Program Files,
      регистрирует её в Windows (автостарт, LocalSystem) и открывает входящие
-     подключения в брандмауэре для локальной сети. Всё декларативно, кастомных
-     действий нет. Файлы берутся из publish-выхода проектов — bindpath'ы
+     подключения в брандмауэре для локальной сети. Всё декларативно; единственное
+     кастомное действие — закрытие лаунчера, и то из штатного расширения WiX
+     (util:CloseApplication). Файлы берутся из publish-выхода проектов — bindpath'ы
      !(bindpath.*) создаёт ProjectReference Publish="true" в .wixproj. -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
     <!-- Инсталлятор не локализован (en-US по умолчанию): видимые пользователю
          строки — английские, это избавляет от возни с культурами и переводом
@@ -18,6 +20,26 @@
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of Prism Host is already installed." />
         <MediaTemplate EmbedCab="yes" />
+
+        <!-- Лаунчер живёт в трее и установку сам не замечает: MSI его не закрывал,
+             поэтому после обновления в памяти оставался процесс старой версии, а
+             запуск новой молча выходил по single-instance мьютексу (см.
+             Prism.Launcher/Program.cs). Теперь пакет закрывает его сам: сначала
+             WM_CLOSE, через 5 секунд процесс снимается принудительно —
+             несохранённого состояния у лаунчера нет. Действие работает в любой
+             транзакции: и при удалении, и при обновлении, которое удалением
+             начинается. Планирует его WiX сам — перед InstallFiles (3999), то
+             есть уже после RemoveFiles (3500): при чистом удалении MSI успевает
+             наткнуться на работающий exe, и файл может уехать в удаление по
+             перезагрузке, хотя сам процесс всё равно закрывается. Перезапуск
+             после установки не делаем — лаунчер поднимется при следующем входе
+             в систему (автозапуск в HKLM\...\Run) или руками. -->
+        <util:CloseApplication Id="CloseLauncher"
+                               Target="Prism.Launcher.exe"
+                               CloseMessage="yes"
+                               Timeout="5"
+                               TerminateProcess="0"
+                               RebootPrompt="no" />
 
         <!-- UI: минимальный набор диалогов (лицензия + установка). Папки с видео
              в инсталляторе нет намеренно: их может быть несколько, а правила

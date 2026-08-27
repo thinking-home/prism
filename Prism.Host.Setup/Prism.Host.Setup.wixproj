@@ -39,6 +39,7 @@
 
     <ItemGroup>
         <PackageReference Include="WixToolset.Firewall.wixext" Version="6.0.2" />
+        <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
         <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
     </ItemGroup>
 

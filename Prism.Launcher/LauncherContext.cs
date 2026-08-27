@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Prism.Mqtt;
 
@@ -13,19 +15,30 @@ namespace Prism.Launcher;
 /// </summary>
 public sealed class LauncherContext : ApplicationContext
 {
+    // Реестр сам переподключается циклом 5 с, поэтому опрос состояния чаще
+    // раза в 2 с смысла не имеет.
+    private static readonly TimeSpan BrokerWatchInterval = TimeSpan.FromSeconds(2);
+
     private readonly NotifyIcon _tray;
     private readonly Control _marshal = new();
     private readonly LauncherOptions _options;
     private readonly PlayerRegistry _mqtt;
+    private readonly Icon _iconNormal;
+    private readonly Icon _iconOffline;
+    private readonly System.Windows.Forms.Timer _brokerWatch;
+    private bool? _brokerConnected; // null — состояние ещё не показано
 
     public LauncherContext()
     {
         _marshal.CreateControl(); // хэндл для маршалинга в UI-поток (BeginInvoke)
         _options = LauncherOptions.Load();
 
+        _iconNormal = LoadTrayIcon();
+        _iconOffline = MakeOfflineIcon(_iconNormal);
+
         _tray = new NotifyIcon
         {
-            Icon = LoadTrayIcon(),
+            Icon = _iconOffline, // до подключения честнее показывать «нет брокера»
             Text = "Prism Launcher",
             Visible = true,
             ContextMenuStrip = BuildMenu(),
@@ -36,7 +49,36 @@ public sealed class LauncherContext : ApplicationContext
 
         _mqtt = new PlayerRegistry(_options.Broker);
         _mqtt.Start();
+
+        // Событий о подключении реестр не даёт, а состояние нужно только для
+        // значка — хватает опроса из UI-потока.
+        _brokerWatch = new System.Windows.Forms.Timer { Interval = (int)BrokerWatchInterval.TotalMilliseconds };
+        _brokerWatch.Tick += (_, _) => ApplyBrokerState();
+        _brokerWatch.Start();
+        ApplyBrokerState();
     }
+
+    /// <summary>
+    /// Приводит значок и подсказку в соответствие с состоянием подключения к
+    /// брокеру: без него ни один плеер не виден и «Отправить» работать не будет,
+    /// поэтому на значке появляется красный крестик.
+    /// </summary>
+    private void ApplyBrokerState()
+    {
+        var connected = _mqtt.Configured && _mqtt.IsConnected;
+        if (_brokerConnected == connected) return;
+        _brokerConnected = connected;
+
+        _tray.Icon = connected ? _iconNormal : _iconOffline;
+        _tray.Text = TrayText(connected
+            ? "Prism Launcher"
+            : _mqtt.Configured
+                ? $"Prism Launcher — no MQTT broker at {_options.Broker.Address}:{_options.Broker.Port}"
+                : "Prism Launcher — MQTT broker is not configured");
+    }
+
+    // NotifyIcon.Text длиннее 63 символов не принимает (длинное имя брокера).
+    private static string TrayText(string text) => text.Length <= 63 ? text : text[..63];
 
     /// <summary>Выполнить действие в UI-потоке (вызывается из пайп-сервера/фоновых задач).</summary>
     public void Post(Action action)
@@ -167,10 +209,64 @@ public sealed class LauncherContext : ApplicationContext
         return SystemIcons.Application;
     }
 
+    /// <summary>
+    /// Тот же значок с красным крестиком в правом нижнем углу — как системные
+    /// оверлеи Windows: заливка кружка + белая обводка, чтобы пометка читалась
+    /// и на светлом, и на тёмном значке при 16 px.
+    /// </summary>
+    private static Icon MakeOfflineIcon(Icon source)
+    {
+        var size = source.Size;
+        using var bitmap = new Bitmap(size.Width, size.Height);
+
+        using (var g = Graphics.FromImage(bitmap))
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.DrawIcon(source, new Rectangle(0, 0, size.Width, size.Height));
+
+            var side = Math.Max(9f, size.Width * 0.6f);
+            var badge = new RectangleF(size.Width - side, size.Height - side, side - 1, side - 1);
+
+            using (var fill = new SolidBrush(Color.FromArgb(210, 40, 40)))
+            using (var outline = new Pen(Color.White, Math.Max(1f, side / 9f)))
+            {
+                g.FillEllipse(fill, badge);
+                g.DrawEllipse(outline, badge);
+            }
+
+            var pad = side / 3.9f;
+            using var cross = new Pen(Color.White, Math.Max(1.4f, side / 6f))
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+            };
+            g.DrawLine(cross, badge.Left + pad, badge.Top + pad, badge.Right - pad, badge.Bottom - pad);
+            g.DrawLine(cross, badge.Right - pad, badge.Top + pad, badge.Left + pad, badge.Bottom - pad);
+        }
+
+        // Icon.FromHandle не владеет хэндлом: копируем значок и освобождаем HICON сами.
+        var handle = bitmap.GetHicon();
+        try
+        {
+            using var temporary = Icon.FromHandle(handle);
+            return (Icon)temporary.Clone();
+        }
+        finally
+        {
+            DestroyIcon(handle);
+        }
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr handle);
+
     private void Exit()
     {
+        _brokerWatch.Stop();
         _tray.Visible = false;
         _mqtt.Dispose();
+        _iconOffline.Dispose(); // наш собственный значок; _iconNormal может быть системным
         ExitThread();
     }
 }
