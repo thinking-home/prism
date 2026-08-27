@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
+using Prism.Mqtt;
 
 namespace Prism.Launcher;
 
@@ -15,7 +16,7 @@ public sealed class LauncherContext : ApplicationContext
     private readonly NotifyIcon _tray;
     private readonly Control _marshal = new();
     private readonly LauncherOptions _options;
-    private readonly MqttBridge _mqtt;
+    private readonly PlayerRegistry _mqtt;
 
     public LauncherContext()
     {
@@ -33,7 +34,7 @@ public sealed class LauncherContext : ApplicationContext
         ShellIntegration.EnsureSendToShortcut();
         ShellIntegration.EnsureAutoStart();
 
-        _mqtt = new MqttBridge(_options.Broker);
+        _mqtt = new PlayerRegistry(_options.Broker);
         _mqtt.Start();
     }
 
@@ -107,7 +108,7 @@ public sealed class LauncherContext : ApplicationContext
         }
 
         var url = host.AbsoluteStreamUrl(media.StreamUrl);
-        var players = _mqtt.Players;
+        var players = _mqtt.Snapshot();
 
         if (players.Count == 0)
         {
@@ -124,7 +125,7 @@ public sealed class LauncherContext : ApplicationContext
         ShowPlayerMenu(players, url, media.Title);
     }
 
-    private void ShowPlayerMenu(IReadOnlyList<PlayerInfo> players, string url, string title)
+    private void ShowPlayerMenu(IReadOnlyList<PlayerSnapshot> players, string url, string title)
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem($"Play “{title}” on:") { Enabled = false });
@@ -137,7 +138,7 @@ public sealed class LauncherContext : ApplicationContext
         menu.Show(Cursor.Position);
     }
 
-    private async Task SendOpen(PlayerInfo player, string url, string title)
+    private async Task SendOpen(PlayerSnapshot player, string url, string title)
     {
         try
         {

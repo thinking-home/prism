@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Prism.Abstractions;
+using Prism.Mqtt;
 using Serilog;
 using ThinkingHome.Migrator;
 
@@ -64,6 +65,13 @@ public static class PrismLibraryApp
         builder.Services.AddSingleton<LibraryMaintenanceService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LibraryMaintenanceService>());
 
+        // Плееры: общий реестр Prism.Mqtt (retained info/state + публикация команд).
+        // Без настроенного брокера библиотека работает, /api/players отвечает 503.
+        var mqtt = builder.Configuration.GetSection("Mqtt").Get<BrokerOptions>() ?? new BrokerOptions();
+        builder.Services.AddSingleton(sp =>
+            new PlayerRegistry(mqtt, sp.GetRequiredService<ILogger<PlayerRegistry>>()));
+        builder.Services.AddHostedService<PlayerRegistryHost>();
+
         // Веб-клиент в dev-режиме живёт на другом origin (Vite) — разрешаем CORS,
         // как у хоста. Для домашней библиотеки это безопасно.
         builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -72,10 +80,13 @@ public static class PrismLibraryApp
         var app = builder.Build();
         app.UseCors();
         app.MapLibraryEndpoints();
+        app.MapPlayerEndpoints();
 
         app.Logger.LogInformation("БД                : {provider}", provider);
         app.Logger.LogInformation("Хосты             : {hosts}",
             hosts.Length == 0 ? "(не настроены)" : string.Join("; ", hosts.Select(h => $"{h.Name} = {h.BaseUrl}")));
+        app.Logger.LogInformation("MQTT              : {broker}",
+            string.IsNullOrWhiteSpace(mqtt.Address) ? "(не настроен — плееры отключены)" : $"{mqtt.Address}:{mqtt.Port}");
 
         try
         {
@@ -85,6 +96,19 @@ public static class PrismLibraryApp
         {
             Log.CloseAndFlush(); // дописать хвост файла при остановке
         }
+    }
+
+    // Hosted-обёртка: общий PlayerRegistry (Prism.Mqtt) про хостинг ASP.NET не
+    // знает — Start при старте приложения, Dispose сделает DI при остановке.
+    private sealed class PlayerRegistryHost(PlayerRegistry registry) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            registry.Start();
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     // Для SQLite относительный путь к файлу разрешаем относительно корня приложения

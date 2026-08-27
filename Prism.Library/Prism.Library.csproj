@@ -27,6 +27,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Prism.Abstractions\Prism.Abstractions.csproj" />
+        <ProjectReference Include="..\Prism.Mqtt\Prism.Mqtt.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Общий MQTT-код Prism: настройки брокера и реестр плееров (контракт
+         prism/player/#). Используется библиотекой и лаунчером; может
+         пригодиться умному дому (список плееров). Хосту НЕ нужен — поэтому
+         отдельный проект, а не Prism.Common. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    </ItemGroup>
+
+</Project>

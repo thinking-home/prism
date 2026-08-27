@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Prism.Mqtt;
 
 namespace Prism.Launcher;
 
@@ -29,12 +30,4 @@ public sealed class HostOptions
     public int Port { get; set; } = 8080;
 
     public string BaseUrl => $"http://{Address}:{Port}";
-}
-
-public sealed class BrokerOptions
-{
-    public string Address { get; set; } = "";
-    public int Port { get; set; } = 1883;
-    public string User { get; set; } = "";
-    public string Password { get; set; } = "";
 }

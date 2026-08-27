@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Library", "Prism.Libr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Library.Console", "Prism.Library.Console\Prism.Library.Console.csproj", "{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prism.Mqtt", "Prism.Mqtt\Prism.Mqtt.csproj", "{CCD700BC-EFFD-42F3-B4E7-E005F625B414}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -150,6 +152,18 @@ Global
 		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|x64.Build.0 = Release|Any CPU
 		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|x86.ActiveCfg = Release|Any CPU
 		{C4FAE1BD-4DEE-46CB-B96C-9DB20B2ADD53}.Release|x86.Build.0 = Release|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Debug|x64.Build.0 = Debug|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Debug|x86.Build.0 = Debug|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Release|x64.ActiveCfg = Release|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Release|x64.Build.0 = Release|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Release|x86.ActiveCfg = Release|Any CPU
+		{CCD700BC-EFFD-42F3-B4E7-E005F625B414}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
