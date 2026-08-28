@@ -145,9 +145,17 @@ function FileRow({ item }: { item: MediaItem }) {
       <span className="badge direct">прямой</span>
     ) : item.streamType === "hls" ? (
       <span className="badge transcode">транскод</span>
+    ) : item.streamType === "pending" ? (
+      // Файл найден сканом, но хост ещё не прочитал метаданные — это штатное
+      // промежуточное состояние, а не ошибка: режим появится через секунды.
+      <span className="badge pending">разбирается</span>
     ) : (
       <span className="badge unsupported">недоступно</span>
     );
+
+  const hint =
+    item.statusMessage ??
+    (item.streamType === "pending" ? "Хост читает метаданные файла" : undefined);
 
   const inner = (
     <>
@@ -162,7 +170,7 @@ function FileRow({ item }: { item: MediaItem }) {
       {inner}
     </Link>
   ) : (
-    <div className="tree-file disabled" title={item.statusMessage ?? undefined}>
+    <div className="tree-file disabled" title={hint}>
       {inner}
     </div>
   );

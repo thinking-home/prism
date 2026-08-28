@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, trackLabel } from "../api";
-import type { MediaItem } from "../api";
+import type { MediaItem, ServerInfo } from "../api";
 import { useServerUrl } from "../serverUrl";
 import { VideoPlayer } from "./VideoPlayer";
 import type { PlayerSubtitle } from "./VideoPlayer";
@@ -10,6 +10,7 @@ export function Watch() {
   const { id = "" } = useParams();
   const { serverUrl } = useServerUrl();
   const [item, setItem] = useState<MediaItem | null>(null);
+  const [hostInfo, setHostInfo] = useState<ServerInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [audio, setAudio] = useState(0);
   const [sub, setSub] = useState(-1); // -1 = субтитры выключены
@@ -29,6 +30,19 @@ export function Watch() {
     return () => ac.abort();
   }, [serverUrl, id]);
 
+  // Хост-владелец записи: его база нужна и для субтитров, и для его же сведений.
+  const hostUrl = item?.hostUrl ?? "";
+
+  // Сведения о самом хосте (ffmpeg, кодек) — справочная строка, поэтому ошибку
+  // не показываем: если хост не ответил, видно и так по невозможности играть.
+  useEffect(() => {
+    if (!hostUrl) return;
+    const ac = new AbortController();
+    setHostInfo(null);
+    api.info(hostUrl, ac.signal).then(setHostInfo).catch(() => {});
+    return () => ac.abort();
+  }, [hostUrl]);
+
   // Только текстовые субтитры можно отдать как WebVTT.
   const textSubs = useMemo(
     () => (item?.subtitleTracks ?? []).filter((s) => s.textBased),
@@ -38,11 +52,11 @@ export function Watch() {
     () =>
       textSubs.map((s) => ({
         index: s.index,
-        url: api.subtitleUrl(serverUrl, id, s.index),
+        url: api.subtitleUrl(hostUrl, id, s.index),
         label: trackLabel(s, `Дорожка ${s.index + 1}`),
         lang: s.language ?? "und",
       })),
-    [textSubs, serverUrl, id],
+    [textSubs, hostUrl, id],
   );
 
   const back = (
@@ -54,7 +68,22 @@ export function Watch() {
   if (error) return <>{back}<p className="muted">Ошибка: {error}</p></>;
   if (!item) return <>{back}<p className="muted">Загрузка…</p></>;
 
-  const url = api.streamUrl(serverUrl, item);
+  // Хост в строке сведений и ссылка на его сессии — единственное место, где
+  // клиент вообще знает про конкретный хост.
+  const hostLine = (
+    <>
+      <span title={item.hostUrl}>хост: {item.host}</span>
+      {hostInfo && (
+        <span>ffmpeg: {hostInfo.ffmpegAvailable ? "есть" : "нет"} · кодек: {hostInfo.outputCodec}</span>
+      )}
+      <Link to={`/debug?host=${encodeURIComponent(item.hostUrl)}`}>сессии ffmpeg</Link>
+    </>
+  );
+
+  // Состояния "pending" здесь не бывает: карточка /api/media/{id} на хосте
+  // всегда ждёт полный resolve, в отличие от списка. Бейдж "разбирается" нужен
+  // только в списке.
+  const url = item.streamUrl; // абсолютный, на хост-владельца
 
   if (!item.playable || !url) {
     return (
@@ -62,6 +91,7 @@ export function Watch() {
         {back}
         <p><span className="badge unsupported">воспроизведение невозможно</span></p>
         <p className="muted">{item.statusMessage ?? "Этот файл нельзя воспроизвести."}</p>
+        <div className="submeta">{hostLine}</div>
       </>
     );
   }
@@ -77,6 +107,7 @@ export function Watch() {
         {item.width > 0 && <span>{item.width}×{item.height}</span>}
         <span>источник: {item.videoCodec ?? "?"}{item.audioCodec ? ` / ${item.audioCodec}` : ""}</span>
         <span>{item.streamType === "hls" ? "транскодирование HLS" : "прямой поток"}</span>
+        {hostLine}
       </div>
 
       <VideoPlayer src={url} type={item.streamType} subtitles={playerSubs} selectedSub={sub} audioTrack={audio} />

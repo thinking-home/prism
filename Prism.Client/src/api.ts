@@ -1,7 +1,10 @@
-// Слой доступа к API сервера Prism.Host. Базовый URL приходит снаружи —
-// это единственная настройка клиента.
+// Слой доступа к API. Клиент работает с библиотекой — её базовый URL и есть
+// единственная настройка. Но часть данных живёт на хостах: поток, субтитры и
+// сессии транскодирования отдаёт хост-владелец файла. Его адрес приходит в
+// каждой записи каталога полем hostUrl, поэтому к хосту клиент ходит только
+// там, где известна конкретная запись (страница фильма).
 
-export type StreamType = "hls" | "direct" | "unsupported";
+export type StreamType = "hls" | "direct" | "pending" | "unsupported";
 
 export interface ServerInfo {
   name: string;
@@ -35,8 +38,15 @@ export interface MediaItem {
   title: string;
   fileName: string;
   relativePath: string;
+  // Хост-владелец: имя из конфига библиотеки и его база — по ней доступны
+  // собственные ручки хоста (сведения о сервере, субтитры, сессии).
+  host: string;
+  hostUrl: string;
+  // pending — хост ещё не разобрал файл; метаданные и режим появятся сами.
   streamType: StreamType;
   playable: boolean;
+  // Абсолютный: библиотека подставляет базу хоста-владельца, браузер стримит
+  // с хоста напрямую.
   streamUrl: string | null;
   durationSeconds: number;
   width: number;
@@ -49,9 +59,9 @@ export interface MediaItem {
   statusMessage: string | null;
 }
 
-// Дерево библиотеки (плагин Prism.Plugins.Library). Группы плоским списком —
-// вложенность через parentId; членство отдельным списком, файл может быть в
-// нескольких группах. present:false — запись о файле, которого сейчас нет на диске.
+// Дерево библиотеки. Группы плоским списком — вложенность через parentId;
+// членство отдельным списком, файл может быть в нескольких группах.
+// present:false — запись о файле, которого сейчас нет ни на одном доступном хосте.
 export interface LibraryNode {
   id: string;
   parentId: string | null;
@@ -102,30 +112,20 @@ async function getJson<T>(base: string, path: string, signal?: AbortSignal): Pro
 }
 
 export const api = {
-  info: (base: string, signal?: AbortSignal) => getJson<ServerInfo>(base, "/api/info", signal),
+  // ---- Библиотека: каталог всех хостов, дерево групп и мета ----------------
   media: (base: string, signal?: AbortSignal) => getJson<MediaItem[]>(base, "/api/media", signal),
   mediaItem: (base: string, id: string, signal?: AbortSignal) =>
     getJson<MediaItem>(base, `/api/media/${id}`, signal),
-  debug: (base: string, signal?: AbortSignal) => getJson<DebugInfo>(base, "/api/debug/sessions", signal),
+  tree: (base: string, signal?: AbortSignal) => getJson<LibraryTree>(base, "/api/library/tree", signal),
 
-  // Дерево библиотеки. Плагин метаданных опционален, поэтому отсутствие ручки —
-  // не ошибка: пустое дерево означает «все файлы вне групп».
-  tree: (base: string, signal?: AbortSignal) =>
-    getJson<LibraryTree>(base, "/api/library/tree", signal).catch(
-      (e): LibraryTree => {
-        if (signal?.aborted) throw e;
-        return { nodes: [], items: [] };
-      },
-    ),
+  // ---- Хост-владелец записи: база берётся из её поля hostUrl ---------------
+  info: (hostUrl: string, signal?: AbortSignal) => getJson<ServerInfo>(hostUrl, "/api/info", signal),
+  debug: (hostUrl: string, signal?: AbortSignal) =>
+    getJson<DebugInfo>(hostUrl, "/api/debug/sessions", signal),
 
-  // Абсолютный URL потока для <video>/hls.js. Для HLS это master-плейлист —
-  // дорожки внутри него переключает сам плеер, URL от них не зависит.
-  streamUrl: (base: string, item: MediaItem): string | null =>
-    item.streamUrl ? join(base, item.streamUrl) : null,
-
-  // Абсолютный URL дорожки субтитров в WebVTT.
-  subtitleUrl: (base: string, id: string, index: number): string =>
-    join(base, `/api/media/${id}/subtitle/${index}.vtt`),
+  // Абсолютный URL дорожки субтитров в WebVTT — их извлекает хост.
+  subtitleUrl: (hostUrl: string, id: string, index: number): string =>
+    join(hostUrl, `/api/media/${id}/subtitle/${index}.vtt`),
 };
 
 // Человекочитаемая подпись дорожки.

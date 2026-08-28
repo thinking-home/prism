@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { api } from "../api";
 import type { DebugInfo, SessionInfo } from "../api";
-import { useServerUrl } from "../serverUrl";
 
 interface Prev {
   cpu: number;
@@ -11,8 +10,11 @@ interface Prev {
 
 // Живая дебаг-панель сессий транскодирования: количество, %CPU (по дельте
 // процессорного времени), память, прогресс каждой сессии. Опрос раз в секунду.
+// Сессии принадлежат конкретному хосту, а не библиотеке, поэтому его база
+// приходит параметром ссылки со страницы фильма — там хост известен.
 export function DebugPanel() {
-  const { serverUrl } = useServerUrl();
+  const [params] = useSearchParams();
+  const host = params.get("host") ?? "";
   const [info, setInfo] = useState<DebugInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cpuByPid, setCpuByPid] = useState<Record<number, number>>({});
@@ -20,10 +22,11 @@ export function DebugPanel() {
   const prev = useRef<Map<number, Prev>>(new Map());
 
   useEffect(() => {
+    if (!host) return;
     let stop = false;
     const tick = async () => {
       try {
-        const d = await api.debug(serverUrl);
+        const d = await api.debug(host);
         if (stop) return;
         const now = performance.now();
         const pct: Record<number, number> = {};
@@ -55,7 +58,16 @@ export function DebugPanel() {
       stop = true;
       clearInterval(id);
     };
-  }, [serverUrl]);
+  }, [host]);
+
+  if (!host)
+    return (
+      <>
+        <Link to="/" className="back">← Библиотека</Link>
+        <h2 className="title">Дебаг сессий</h2>
+        <p className="muted">Сессии принадлежат хосту — откройте панель ссылкой со страницы фильма.</p>
+      </>
+    );
 
   const sessions = info?.sessions ?? [];
   const cores = info?.cpuCount ?? 1;
@@ -66,6 +78,7 @@ export function DebugPanel() {
     <>
       <Link to="/" className="back">← Библиотека</Link>
       <h2 className="title">Дебаг сессий</h2>
+      <p className="muted small">хост: <code>{host}</code></p>
       {error && <p className="muted">Ошибка: {error}</p>}
 
       <div className="stat-row">

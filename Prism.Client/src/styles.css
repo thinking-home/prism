@@ -229,6 +229,10 @@ a.tree-file:hover {
   background: #15324d;
   color: #6ea8fe;
 }
+.badge.pending {
+  background: #3a2f14;
+  color: #fbbf24;
+}
 .badge.unsupported {
   background: #422;
   color: #f87171;
