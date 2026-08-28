@@ -12,10 +12,4 @@
         <ProjectReference Include="..\Prism.Host\Prism.Host.csproj" />
     </ItemGroup>
 
-    <!-- Дев-раскладка плагинов (plugins/) — не контент приложения: иначе Web SDK
-         затягивает её *.json в publish. -->
-    <ItemGroup>
-        <Content Remove="plugins\**" />
-    </ItemGroup>
-
 </Project>

@@ -4,12 +4,10 @@
 bin
 obj
 
-# Генерируемое во время выполнения / деплоя плагинов
-Prism.Host.Console/plugins/
+# Генерируемое во время выполнения
 Prism.Host.Console/data/
 Prism.Host.Console/logs/
 Prism.Host.Service/logs/
-Prism.Host/plugins/
 Prism.Host/data/
 Prism.Host/logs/
 

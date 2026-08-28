@@ -1,7 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
-using Prism.Abstractions;
 using Prism.Mqtt;
 using Serilog;
 using ThinkingHome.Migrator;

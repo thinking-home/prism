@@ -26,12 +26,11 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Prism.Abstractions\Prism.Abstractions.csproj" />
         <ProjectReference Include="..\Prism.Mqtt\Prism.Mqtt.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="ThinkingHome.Migrator" Version="3.10.0" />

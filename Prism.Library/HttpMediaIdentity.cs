@@ -1,9 +1,32 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Prism.Abstractions;
 
 namespace Prism.Library;
+
+/// <summary>
+/// Идентичность файлов библиотеки: что сейчас лежит на хостах и куда «переехало»
+/// содержимое. Id файла — ключ содержимого (fingerprint: размер + хеш краёв),
+/// поэтому записи, привязанные к id, переживают переименование и перенос файлов.
+/// Единственная реализация — HttpMediaIdentity ниже, поверх опроса хостов.
+/// </summary>
+public interface IMediaIdentity
+{
+    /// <summary>Файлы текущего скана: id + относительный путь. Id — для флага
+    /// наличия и сборки мусора, путь — для правил автозаполнения.</summary>
+    Task<IReadOnlyCollection<MediaFile>> GetLiveFilesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Куда «переехало» содержимое: если последний известный путь файла
+    /// <paramref name="missingId"/> теперь занят другим содержимым (файл докачался
+    /// или перезаписан), вернуть его текущий id; иначе null.
+    /// </summary>
+    Task<string?> FindSuccessorAsync(string missingId, CancellationToken ct = default);
+}
+
+/// <summary>Файл библиотеки: ключ содержимого + путь относительно корня своей
+/// медиапапки (прямые слеши, без ведущего слеша) — одинаковый на всех ОС.</summary>
+public sealed record MediaFile(string Id, string RelativePath);
 
 /// <summary>Хост Prism из конфига библиотеки (секция "Hosts").</summary>
 public sealed class HostEntry
