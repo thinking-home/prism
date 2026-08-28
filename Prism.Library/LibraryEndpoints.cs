@@ -232,16 +232,13 @@ public static class LibraryEndpoints
         // Будит фоновый цикл (ремап + правила автозаполнения), чтобы не ждать
         // таймер — например, сразу после добавления файлов. Завершения не ждёт:
         // итоги прохода пишутся в лог.
-        // ?replace=true — режим отладки правил: библиотека очищается здесь же (это
-        // несколько DELETE, ждать нечего), а дальше обычный проход раскладывает её
-        // заново. Поэтому замена возможна только с ручки: фоновый цикл про неё не
-        // знает и сам ничего не удаляет.
-        app.MapPost("/api/library/scan",
-            async (LibraryMaintenanceService maintenance, IDbContextFactory<LibraryDbContext> factory,
-                ILoggerFactory loggers, bool? replace, CancellationToken ct) =>
+        // ?replace=true — режим отладки правил: очистку выполняет сам цикл в начале
+        // следующего прохода. Чистить здесь нельзя: проход мог уже идти, и удаление
+        // из-под него оставляло группы с несуществующим родителем и членство на
+        // удалённые id (у прохода в кэше остаются id только что удалённых групп).
+        app.MapPost("/api/library/scan", (LibraryMaintenanceService maintenance, bool? replace) =>
         {
-            if (replace == true) await ClearLibraryAsync(factory, loggers.CreateLogger(typeof(LibraryEndpoints)), ct);
-            maintenance.RequestScan();
+            maintenance.RequestScan(replace == true);
             return Results.Accepted();
         });
 
@@ -277,23 +274,6 @@ public static class LibraryEndpoints
     // Записи файлов, которых сейчас нет на диске, тоже удаляются: это отладка
     // правил, а не бережное обновление, поэтому мета такого файла не вернётся,
     // пока его хост/диск не подключат обратно.
-    private static async Task ClearLibraryAsync(IDbContextFactory<LibraryDbContext> factory,
-        ILogger logger, CancellationToken ct)
-    {
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var items = await db.NodeItems.ToListAsync(ct);
-        var meta = await db.Meta.ToListAsync(ct);
-        var nodes = await db.Nodes.ToListAsync(ct);
-
-        db.NodeItems.RemoveRange(items);
-        db.Meta.RemoveRange(meta);
-        db.Nodes.RemoveRange(nodes);
-        await db.SaveChangesAsync(ct);
-
-        logger.LogInformation("Библиотека очищена перед раскладкой: группы {nodes}, членство {items}, мета {meta}",
-            nodes.Count, items.Count, meta.Count);
-    }
-
     // Слияние меты: значение null удаляет ключ, остальные — вставка/замена.
     private static async Task MergeMetaAsync(LibraryDbContext db, string entityType, string entityKey,
         Dictionary<string, string?> input, CancellationToken ct)

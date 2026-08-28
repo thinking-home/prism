@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Alert, Badge, Group, Loader, NavLink, Stack, Text } from "@mantine/core";
+import { FilePlay, FileX, Folder } from "lucide-react";
 import { api } from "../api";
 import type { LibraryTree, MediaItem, StreamType } from "../api";
 import { useServerUrl } from "../serverUrl";
@@ -124,9 +125,22 @@ function countFiles(node: TreeNode): number {
 
 // Группы свёрнуты: у домашней библиотеки их десятки, и обзор важнее содержимого.
 // NavLink хранит состояние раскрытия сам — своего кода на это не нужно.
+// Счётчик файлов идёт меткой сразу за названием, а правая секция остаётся за
+// шевроном NavLink: он там по умолчанию и разворачивается при раскрытии.
 function NodeView({ node }: { node: TreeNode }) {
   return (
-    <NavLink label={node.name} rightSection={<Badge variant="default">{countFiles(node)}</Badge>} childrenOffset={28}>
+    <NavLink
+      leftSection={<Folder size={16} />}
+      label={
+        <Group gap="xs">
+          {node.name}
+          <Badge variant="default" size="sm">
+            {countFiles(node)}
+          </Badge>
+        </Group>
+      }
+      childrenOffset={28}
+    >
       {node.children.map((c) => (
         <NodeView key={c.id} node={c} />
       ))}
@@ -137,6 +151,7 @@ function NodeView({ node }: { node: TreeNode }) {
         <NavLink
           key={id}
           disabled
+          leftSection={<FileX size={16} />}
           label="нет на диске"
           description={`id ${id}`}
           rightSection={<Badge color="red" variant="light">отсутствует</Badge>}
@@ -164,6 +179,7 @@ function FileRow({ item }: { item: MediaItem }) {
   // Тип component у NavLink полиморфный, поэтому играбельная и неиграбельная
   // строки — две разные ветки, а не один элемент с вычисляемым component.
   const props = {
+    leftSection: <FilePlay size={16} />,
     label: item.title,
     description: hint ? `${item.fileName} — ${hint}` : item.fileName,
     rightSection: (
