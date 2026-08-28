@@ -97,14 +97,6 @@
                     </Component>
                 </Directory>
 
-                <!-- Плагины — как в дев-раскладке: plugins/<имя>/… ; содержимое
-                     папки публикации плагина собирается по маске при сборке MSI. -->
-                <Directory Id="PluginsDir" Name="plugins">
-                    <Directory Id="LibraryPluginDir" Name="Prism.Plugins.Library">
-                        <Files Include="!(bindpath.Prism.Plugins.Library)\**" />
-                    </Directory>
-                </Directory>
-
                 <!-- Лаунчер (значок в трее + пункт «Отправить» проводника).
                      В своей подпапке, потому что у него собственный
                      appsettings.json — имя совпадает с конфигом хоста. -->

@@ -20,3 +20,6 @@ Prism.Player.Android/*.jks
 # Данные и логи сервиса библиотеки
 Prism.Library.Console/data/
 Prism.Library.Console/logs/
+
+# Собранный веб-клиент, который раздаёт библиотека (npm run build → dist)
+Prism.Library.Console/wwwroot/

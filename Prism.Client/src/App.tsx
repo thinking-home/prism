@@ -48,11 +48,11 @@ function Header() {
             setOpen(false);
           }}
         >
-          <label>URL сервера</label>
+          <label>URL библиотеки</label>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="http://localhost:8080"
+            placeholder="http://localhost:8081"
             spellCheck={false}
           />
           <button type="submit">Сохранить</button>

@@ -1,13 +1,14 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-// Единственная настройка клиента — URL сервера. Хранится в localStorage.
+// Единственная настройка клиента — URL библиотеки. Хранится в localStorage.
 const STORAGE_KEY = "prism.serverUrl";
 
 function defaultServerUrl(): string {
-  // По умолчанию — тот же хост, что открыл клиент, но порт API сервера (8080).
-  const { protocol, hostname } = window.location;
-  return `${protocol}//${hostname}:8080`;
+  // Клиента раздаёт сама библиотека, поэтому по умолчанию её API — тот же
+  // origin, и настраивать нечего. Настройка остаётся для разработки: Vite
+  // поднимает клиент на своём порту, и адрес библиотеки вписывается руками.
+  return window.location.origin;
 }
 
 function loadServerUrl(): string {

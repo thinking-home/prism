@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Prism.Abstractions;
 using Prism.Mqtt;
 using Serilog;
@@ -79,6 +80,22 @@ public static class PrismLibraryApp
 
         var app = builder.Build();
         app.UseCors();
+
+        // ---- Веб-клиент: статику раздаёт сама библиотека -----------------------
+        // Собранный клиент (npm run build) лежит в папке Client:Path — по умолчанию
+        // wwwroot рядом с приложением, туда его положит инсталлятор. Клиент на
+        // hash-роутинге, поэтому SPA-фолбэк не нужен: все его маршруты — это "/".
+        // Папки нет — раздачи нет, API работает как прежде (так живёт запуск из
+        // исходников, где клиент поднимает Vite на своём порту).
+        var clientPath = ResolveClientPath(app.Configuration, app.Environment.ContentRootPath);
+        var clientPresent = Directory.Exists(clientPath);
+        if (clientPresent)
+        {
+            var clientFiles = new PhysicalFileProvider(clientPath);
+            app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = clientFiles });
+            app.UseStaticFiles(new StaticFileOptions { FileProvider = clientFiles });
+        }
+
         app.MapLibraryEndpoints();
         app.MapPlayerEndpoints();
 
@@ -87,6 +104,8 @@ public static class PrismLibraryApp
             hosts.Length == 0 ? "(не настроены)" : string.Join("; ", hosts.Select(h => $"{h.Name} = {h.BaseUrl}")));
         app.Logger.LogInformation("MQTT              : {broker}",
             string.IsNullOrWhiteSpace(mqtt.Address) ? "(не настроен — плееры отключены)" : $"{mqtt.Address}:{mqtt.Port}");
+        app.Logger.LogInformation("Веб-клиент        : {client}",
+            clientPresent ? clientPath : $"(нет папки {clientPath} — раздача выключена)");
 
         try
         {
@@ -109,6 +128,14 @@ public static class PrismLibraryApp
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    // Папка с собранным веб-клиентом: относительный путь — от корня приложения.
+    private static string ResolveClientPath(IConfiguration config, string contentRoot)
+    {
+        var configured = config["Client:Path"];
+        if (string.IsNullOrWhiteSpace(configured)) configured = "wwwroot";
+        return Path.IsPathRooted(configured) ? configured : Path.Combine(contentRoot, configured);
     }
 
     // Для SQLite относительный путь к файлу разрешаем относительно корня приложения

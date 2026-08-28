@@ -33,7 +33,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Prism.Host.Service\Prism.Host.Service.csproj" Publish="true" />
-        <ProjectReference Include="..\Prism.Plugins.Library\Prism.Plugins.Library.csproj" Publish="true" />
         <ProjectReference Include="..\Prism.Launcher\Prism.Launcher.csproj" Publish="true" />
     </ItemGroup>
 
