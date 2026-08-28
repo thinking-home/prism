@@ -128,6 +128,12 @@ cd Prism.Client && npx tsc -b --force
 cd Prism.Client && npm run build && cp -r dist ../Prism.Library.Console/wwwroot
 ```
 
+Грабли проверки интерфейса: во встроенном браузере (Browser pane) **не работает
+`requestAnimationFrame`**, поэтому всё, что у Mantine завязано на переходы, там
+не срабатывает — `Modal` оставляет в DOM пустой корень, группы `NavLink` не
+разворачиваются. Код при этом исправен (дети группы в DOM на месте); такие места
+проверять в обычном браузере.
+
 Данные (всё в `.gitignore`, переносить не нужно):
 `Prism.Host.Console/data/{fingerprints.json,mediainfo.json}`,
 `Prism.Library.Console/data/prism.db`, `logs/` у обоих.

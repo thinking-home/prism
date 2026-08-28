@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Code,
+  Group,
+  Loader,
+  Select,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import { api, trackLabel } from "../api";
 import type { MediaItem, ServerInfo } from "../api";
 import { useServerUrl } from "../serverUrl";
@@ -60,89 +72,128 @@ export function Watch() {
   );
 
   const back = (
-    <Link to="/" className="back">
+    <Anchor component={Link} to="/" size="sm">
       ← Библиотека
-    </Link>
+    </Anchor>
   );
 
-  if (error) return <>{back}<p className="muted">Ошибка: {error}</p></>;
-  if (!item) return <>{back}<p className="muted">Загрузка…</p></>;
+  if (error)
+    return (
+      <Stack gap="sm">
+        {back}
+        <Alert color="red" title="Ошибка">
+          {error}
+        </Alert>
+      </Stack>
+    );
+
+  if (!item)
+    return (
+      <Stack gap="sm">
+        {back}
+        <Group justify="center" py="xl">
+          <Loader />
+        </Group>
+      </Stack>
+    );
 
   // Хост в строке сведений и ссылка на его сессии — единственное место, где
   // клиент вообще знает про конкретный хост.
   const hostLine = (
-    <>
-      <span title={item.hostUrl}>хост: {item.host}</span>
+    <Group gap="md">
+      <Text size="sm" c="dimmed" title={item.hostUrl}>
+        хост: {item.host}
+      </Text>
       {hostInfo && (
-        <span>ffmpeg: {hostInfo.ffmpegAvailable ? "есть" : "нет"} · кодек: {hostInfo.outputCodec}</span>
+        <Text size="sm" c="dimmed">
+          ffmpeg: {hostInfo.ffmpegAvailable ? "есть" : "нет"} · кодек: {hostInfo.outputCodec}
+        </Text>
       )}
-      <Link to={`/debug?host=${encodeURIComponent(item.hostUrl)}`}>сессии ffmpeg</Link>
-    </>
+      <Anchor component={Link} to={`/debug?host=${encodeURIComponent(item.hostUrl)}`} size="sm">
+        сессии ffmpeg
+      </Anchor>
+    </Group>
   );
 
   // Состояния "pending" здесь не бывает: карточка /api/media/{id} на хосте
-  // всегда ждёт полный resolve, в отличие от списка. Бейдж "разбирается" нужен
-  // только в списке.
+  // всегда ждёт полный resolve, в отличие от списка.
   const url = item.streamUrl; // абсолютный, на хост-владельца
 
-  if (!item.playable || !url) {
+  if (!item.playable || !url)
     return (
-      <>
+      <Stack gap="sm">
         {back}
-        <p><span className="badge unsupported">воспроизведение невозможно</span></p>
-        <p className="muted">{item.statusMessage ?? "Этот файл нельзя воспроизвести."}</p>
-        <div className="submeta">{hostLine}</div>
-      </>
+        <Alert color="yellow" title="Воспроизведение невозможно">
+          {item.statusMessage ?? "Этот файл нельзя воспроизвести."}
+        </Alert>
+        {hostLine}
+      </Stack>
     );
-  }
-
-  const showAudioPicker = item.audioTracks.length > 1;
-  const showSubPicker = textSubs.length > 0;
 
   return (
-    <>
+    <Stack gap="sm">
       {back}
-      <h2 className="title">{item.title}</h2>
-      <div className="submeta">
-        {item.width > 0 && <span>{item.width}×{item.height}</span>}
-        <span>источник: {item.videoCodec ?? "?"}{item.audioCodec ? ` / ${item.audioCodec}` : ""}</span>
-        <span>{item.streamType === "hls" ? "транскодирование HLS" : "прямой поток"}</span>
-        {hostLine}
-      </div>
+      <Title order={2}>{item.title}</Title>
 
-      <VideoPlayer src={url} type={item.streamType} subtitles={playerSubs} selectedSub={sub} audioTrack={audio} />
+      <Group gap="md">
+        {item.width > 0 && (
+          <Text size="sm" c="dimmed">
+            {item.width}×{item.height}
+          </Text>
+        )}
+        <Text size="sm" c="dimmed">
+          источник: {item.videoCodec ?? "?"}
+          {item.audioCodec ? ` / ${item.audioCodec}` : ""}
+        </Text>
+        <Badge variant="light" color={item.streamType === "hls" ? "blue" : "green"}>
+          {item.streamType === "hls" ? "транскодирование HLS" : "прямой поток"}
+        </Badge>
+      </Group>
+      {hostLine}
 
-      {(showAudioPicker || showSubPicker) && (
-        <div className="tracks">
-          {showAudioPicker && (
-            <label>
-              Аудио
-              <select value={audio} onChange={(e) => setAudio(Number(e.target.value))}>
-                {item.audioTracks.map((t) => (
-                  <option key={t.index} value={t.index}>
-                    {trackLabel(t, `Дорожка ${t.index + 1}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {showSubPicker && (
-            <label>
-              Субтитры
-              <select value={sub} onChange={(e) => setSub(Number(e.target.value))}>
-                <option value={-1}>Выкл</option>
-                {textSubs.map((s) => (
-                  <option key={s.index} value={s.index}>
-                    {trackLabel(s, `Дорожка ${s.index + 1}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
-      )}
+      <VideoPlayer
+        src={url}
+        type={item.streamType}
+        subtitles={playerSubs}
+        selectedSub={sub}
+        audioTrack={audio}
+      />
 
-      <div className="muted small">URL потока: <code>{url}</code></div>
-    </>
+      <Group gap="md" align="flex-end">
+        {item.audioTracks.length > 1 && (
+          <Select
+            label="Аудио"
+            w={260}
+            allowDeselect={false}
+            value={String(audio)}
+            onChange={(v) => setAudio(Number(v))}
+            data={item.audioTracks.map((t) => ({
+              value: String(t.index),
+              label: trackLabel(t, `Дорожка ${t.index + 1}`),
+            }))}
+          />
+        )}
+        {textSubs.length > 0 && (
+          <Select
+            label="Субтитры"
+            w={260}
+            allowDeselect={false}
+            value={String(sub)}
+            onChange={(v) => setSub(Number(v))}
+            data={[
+              { value: "-1", label: "Выкл" },
+              ...textSubs.map((s) => ({
+                value: String(s.index),
+                label: trackLabel(s, `Дорожка ${s.index + 1}`),
+              })),
+            ]}
+          />
+        )}
+      </Group>
+
+      <Text size="xs" c="dimmed">
+        URL потока: <Code>{url}</Code>
+      </Text>
+    </Stack>
   );
 }

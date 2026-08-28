@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Box } from "@mantine/core";
 import Hls from "hls.js";
 import type { StreamType } from "../api";
 
@@ -83,7 +84,16 @@ export function VideoPlayer({
   const active = subtitles.find((s) => s.index === selectedSub);
 
   return (
-    <video ref={ref} controls autoPlay playsInline crossOrigin="anonymous" className="player">
+    <Box
+      component="video"
+      ref={ref}
+      controls
+      autoPlay
+      playsInline
+      crossOrigin="anonymous"
+      w="100%"
+      bg="black"
+    >
       {active && (
         <track
           key={active.index}
@@ -94,6 +104,6 @@ export function VideoPlayer({
           label={active.label}
         />
       )}
-    </video>
+    </Box>
   );
 }

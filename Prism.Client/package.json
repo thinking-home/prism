@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mantine/core": "^9.5.2",
+    "@mantine/hooks": "^9.5.2",
     "hls.js": "^1.5.17",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
