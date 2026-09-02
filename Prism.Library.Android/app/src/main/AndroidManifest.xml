@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Манифест — «паспорт» приложения: что за приложение и из чего состоит. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Android TV: поддержка leanback и отсутствие требования тачскрина
+         (иначе на ТВ приложение считается несовместимым). -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <application
+        android:label="Prism Library"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/banner"
+        android:theme="@style/AppTheme">
+
+        <!-- Единственный на этом шаге экран приложения: показывает «Hello World». -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <!-- Этот intent-filter делает экран точкой входа и кладёт иконку в меню приложений. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- LEANBACK_LAUNCHER — иконка/баннер на домашнем экране Android TV. -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

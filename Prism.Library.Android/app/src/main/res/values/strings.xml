@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Строки по умолчанию (английский). Русские — в values-ru/strings.xml.
+     Язык выбирается автоматически по языку системы. -->
+<resources>
+    <string name="hello_world">Hello World</string>
+</resources>
