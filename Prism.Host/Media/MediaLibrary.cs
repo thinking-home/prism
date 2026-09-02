@@ -6,6 +6,11 @@ namespace Prism.Host.Media;
 
 public enum PlaybackMode
 {
+    /// <summary>Файл ещё не разобран (ffprobe не выполнялся) — переходное состояние,
+    /// метаданные появятся после фоновой доразборки. Первый член enum — это же
+    /// значение по умолчанию у только что найденного файла.</summary>
+    Pending,
+
     /// <summary>Файл браузерный — отдаётся напрямую с поддержкой HTTP Range.</summary>
     Direct,
 
@@ -24,6 +29,15 @@ public sealed class MediaItem
 
     /// <summary>Текущий путь файла; обновляется при переезде содержимого.</summary>
     public required string Path { get; set; }
+
+    /// <summary>Путь относительно корня своей медиапапки, прямые слеши на всех ОС.
+    /// Единственный потребитель — правила автозаполнения библиотеки: их шаблоны
+    /// сопоставляются именно с этим путём (относительный он затем, чтобы правила
+    /// не зависели от расположения корня на конкретной машине и были одинаковы
+    /// для всех хостов). К ним он попадает полем relativePath в ответе /api/media,
+    /// которым сервис библиотеки опрашивает хост. Ремапу и стримингу не нужен —
+    /// они работают по id и абсолютному пути.</summary>
+    public required string RelativePath { get; set; }
 
     public required string FileName { get; set; }
     public MediaInfo? Info { get; set; }
@@ -128,6 +142,7 @@ public sealed class MediaLibrary
 
     private readonly MediaProbe _probe;
     private readonly FFTools _tools;
+    private readonly MediaInfoCache _infoCache;
     private readonly ILogger<MediaLibrary> _logger;
     // Шаблоны путей к файлам дорожек рядом с видео (из настроек).
     private readonly string[] _subtitleFiles;
@@ -153,10 +168,11 @@ public sealed class MediaLibrary
     public IReadOnlyList<string> MediaDirectories { get; }
 
     public MediaLibrary(PlayerOptions options, MediaProbe probe, FFTools tools,
-        IHostEnvironment env, ILogger<MediaLibrary> logger)
+        MediaInfoCache infoCache, IHostEnvironment env, ILogger<MediaLibrary> logger)
     {
         _probe = probe;
         _tools = tools;
+        _infoCache = infoCache;
         _logger = logger;
         _subtitleFiles = options.SubtitleFiles;
         _audioFiles = options.AudioFiles;
@@ -180,6 +196,11 @@ public sealed class MediaLibrary
         _cachePath = Path.Combine(env.ContentRootPath, "data", "fingerprints.json");
         (_fingerprints, _lastPath) = LoadCache();
     }
+
+    /// <summary>Срабатывает в конце скана, если найден файл без метаданных, —
+    /// сигнал фоновой доразборке (<see cref="MediaResolveService"/>) проснуться,
+    /// не дожидаясь её таймера.</summary>
+    public event Action? PendingDiscovered;
 
     /// <summary>Повторно сканирует папки с медиа и возвращает текущий каталог.</summary>
     public IReadOnlyList<MediaItem> Scan()
@@ -220,10 +241,12 @@ public sealed class MediaLibrary
                 if (id is null) continue; // нечитаемый/исчезающий файл — пропускаем
                 if (!seen.Add(id)) continue;
 
+                var relative = Path.GetRelativePath(dir, file).Replace('\\', '/');
                 var item = _byId.GetOrAdd(id, _ => new MediaItem
                 {
                     Id = id,
                     Path = file,
+                    RelativePath = relative,
                     FileName = Path.GetFileName(file),
                 });
                 if (item.Path != file)
@@ -231,6 +254,7 @@ public sealed class MediaLibrary
                     // Содержимое переехало (или первой нашлась другая копия) —
                     // id прежний, путь актуализируем.
                     item.Path = file;
+                    item.RelativePath = relative;
                     item.FileName = Path.GetFileName(file);
                 }
                 item.ExternalSubtitles = MatchTrackFiles(subs, file, _subtitleFiles);
@@ -241,6 +265,13 @@ public sealed class MediaLibrary
         }
 
         SaveCacheIfDirty();
+        _infoCache.SaveIfDirty(); // пакетная выгрузка разборов, накопленных с прошлого скана
+
+        // Файлы без метаданных разберёт фоновый цикл — будим его, чтобы новый файл
+        // получил метаданные через секунды, а не по таймеру.
+        if (found.Any(i => i.Info is null))
+            PendingDiscovered?.Invoke();
+
         return found;
     }
 
@@ -382,6 +413,32 @@ public sealed class MediaLibrary
     }
 
     /// <summary>
+    /// Быстрый резолв без запуска инструментов: применяет разбор из персистентного
+    /// кэша, если он там есть; иначе файл остаётся неразобранным (Pending) до
+    /// фоновой доразборки. ffprobe здесь не запускается ни для видео, ни для
+    /// внешних аудиофайлов — поэтому список отвечает мгновенно.
+    /// </summary>
+    public async Task TryResolveFromCacheAsync(MediaItem item)
+    {
+        if (item.Info is not null) return;
+        var cached = _infoCache.TryGet(item.Id);
+        if (cached is null) return;
+
+        var sem = _resolveLocks.GetOrAdd(item.Id, _ => new SemaphoreSlim(1, 1));
+        if (!await sem.WaitAsync(0)) return; // файл уже резолвится параллельно — не ждём
+        try
+        {
+            if (item.Info is not null) return;
+            await ApplyInfoAsync(item, cached);
+            ApplyExternalAudioMode(item);
+        }
+        finally
+        {
+            sem.Release();
+        }
+    }
+
+    /// <summary>
     /// Лениво анализирует файл и определяет режим воспроизведения. Операция общая и
     /// одноразовая: результат кэшируется, повторные вызовы возвращают его сразу.
     /// </summary>
@@ -444,10 +501,20 @@ public sealed class MediaLibrary
             return;
         }
 
-        // ВАЖНО: анализ файла не привязан к токену конкретного HTTP-запроса.
-        // Прерванный запрос (например, при перемотке клиент отменяет загрузку
-        // сегментов) не должен отменять ffprobe и «отравлять» кэш режимом Unsupported.
-        var info = await _probe.ProbeAsync(item.Path, CancellationToken.None);
+        // Разбор мог сохраниться в персистентном кэше (ключ — отпечаток, он же id):
+        // тогда ffprobe не нужен вовсе — в том числе после рестарта хоста. Режим
+        // ниже вычисляется всегда: он зависит от окружения (наличие ffmpeg и
+        // декодера), а не только от содержимого файла.
+        var info = _infoCache.TryGet(item.Id);
+        if (info is null)
+        {
+            // ВАЖНО: анализ файла не привязан к токену конкретного HTTP-запроса.
+            // Прерванный запрос (например, при перемотке клиент отменяет загрузку
+            // сегментов) не должен отменять ffprobe и «отравлять» кэш режимом Unsupported.
+            info = await _probe.ProbeAsync(item.Path, CancellationToken.None);
+            if (info is not null)
+                _infoCache.Put(item.Id, info); // неудачу не кэшируем: ffprobe может появиться позже
+        }
 
         if (info is null)
         {
@@ -474,6 +541,14 @@ public sealed class MediaLibrary
             return;
         }
 
+        await ApplyInfoAsync(item, info);
+    }
+
+    // Выбирает режим воспроизведения по разбору и публикует его в записи. Режим
+    // зависит от окружения (наличие ffmpeg и декодера), поэтому вычисляется при
+    // каждом запуске заново, а не хранится в кэше вместе с разбором.
+    private async Task ApplyInfoAsync(MediaItem item, MediaInfo info)
+    {
         if (info.IsBrowserNative)
         {
             item.Mode = PlaybackMode.Direct;

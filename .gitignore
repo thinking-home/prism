@@ -4,15 +4,20 @@
 bin
 obj
 
-# Генерируемое во время выполнения / деплоя плагинов
-Prism.Host.Console/plugins/
+# Генерируемое во время выполнения
 Prism.Host.Console/data/
 Prism.Host.Console/logs/
 Prism.Host.Service/logs/
-Prism.Host/plugins/
 Prism.Host/data/
 Prism.Host/logs/
 
 # Android release signing — секреты и ключ не в git
 Prism.Player.Android/keystore.properties
 Prism.Player.Android/*.jks
+
+# Данные и логи сервиса библиотеки
+Prism.Library.Console/data/
+Prism.Library.Console/logs/
+
+# Собранный веб-клиент, который раздаёт библиотека (npm run build → dist)
+Prism.Library.Console/wwwroot/

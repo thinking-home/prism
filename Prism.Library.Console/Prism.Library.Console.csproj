@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-    <!-- Запуск сервера из консоли (dotnet run) — сценарий разработки. -->
+    <!-- Запуск сервиса библиотеки из консоли — штатный вариант для unix-систем
+         (и сценарий разработки). -->
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -9,7 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Prism.Host\Prism.Host.csproj" />
+        <ProjectReference Include="..\Prism.Library\Prism.Library.csproj" />
     </ItemGroup>
 
 </Project>

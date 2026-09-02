@@ -1,4 +1,3 @@
-using Prism.Abstractions;
 using Prism.Host.Media;
 using Serilog;
 
@@ -22,7 +21,7 @@ public static class PrismHostApp
         // приложением (у службы Windows content root — папка установки, поэтому
         // путь абсолютный). Уровни — секция "Serilog" в appsettings.json.
         // Логгер создаётся сразу (а не в колбэке UseSerilog), чтобы в файл попадали
-        // и сообщения этапа сборки приложения — например, загрузки плагинов.
+        // и сообщения этапа сборки приложения, до старта хоста.
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(builder.Configuration)
             .WriteTo.Console()
@@ -60,19 +59,11 @@ public static class PrismHostApp
         builder.Services.AddSingleton(player);
         builder.Services.AddSingleton<FFTools>();
         builder.Services.AddSingleton<MediaProbe>();
+        builder.Services.AddSingleton<MediaInfoCache>();
         builder.Services.AddSingleton<MediaLibrary>();
-        builder.Services.AddSingleton<IMediaIdentity, MediaIdentity>();
         builder.Services.AddSingleton<HlsTranscoder>();
         builder.Services.AddSingleton<SubtitleService>();
-
-        // Плагины: список сборок из appsettings ("Plugins"). Без плагинов ядро работает
-        // как обычно. Каждый модуль регистрирует свои сервисы и (ниже) эндпоинты.
-        // Отдаём плагинам корень приложения (для разрешения относительных путей, напр. SQLite).
-        builder.Configuration["ContentRoot"] = builder.Environment.ContentRootPath;
-        var modules = PluginLoader.Load(builder.Configuration, builder.Environment.ContentRootPath,
-            LoggerFactory.Create(b => b.AddSerilog()).CreateLogger("Plugins"));
-        foreach (var module in modules)
-            module.ConfigureServices(builder.Services, builder.Configuration);
+        builder.Services.AddHostedService<MediaResolveService>();
 
         // Клиент (Prism.Client) живёт на другом origin (dev-сервер Vite), поэтому
         // разрешаем кросс-доменные запросы к API. Для домашнего плеера это безопасно.
@@ -81,12 +72,6 @@ public static class PrismHostApp
 
         var app = builder.Build();
         app.UseCors();
-
-        // Эндпоинты плагинов.
-        foreach (var module in modules)
-            module.MapEndpoints(app);
-
-        var metaSources = app.Services.GetServices<IMediaMetaSource>().ToArray();
 
         var library = app.Services.GetRequiredService<MediaLibrary>();
         var transcoder = app.Services.GetRequiredService<HlsTranscoder>();
@@ -111,16 +96,15 @@ public static class PrismHostApp
         app.MapGet("/api/media", async (CancellationToken ct) =>
         {
             var items = library.Scan();
-            var byId = new Dictionary<string, Dictionary<string, object?>>();
             var list = new List<Dictionary<string, object?>>();
             foreach (var it in items)
             {
-                await library.ResolveAsync(it, ct);
-                var dto = MediaDto(it);
-                list.Add(dto);
-                byId[it.Id] = dto;
+                // Список не ждёт ffprobe: разбор применяется из персистентного кэша,
+                // неразобранные файлы отдаются в переходном состоянии ("pending")
+                // и дозаполняются фоновой доразборкой (MediaResolveService).
+                await library.TryResolveFromCacheAsync(it);
+                list.Add(MediaDto(it));
             }
-            await ApplyMetaAsync(metaSources, byId, ct);
             return Results.Json(list);
         });
 
@@ -131,9 +115,7 @@ public static class PrismHostApp
             var item = library.Get(id);
             if (item is null) return Results.NotFound();
             await library.ResolveAsync(item, ct);
-            var dto = MediaDto(item);
-            await ApplyMetaAsync(metaSources, new() { [id] = dto }, ct);
-            return Results.Json(dto);
+            return Results.Json(MediaDto(item));
         });
 
         // ---- Резолв файла по отпечатку содержимого (для лаунчера) --------------
@@ -148,6 +130,16 @@ public static class PrismHostApp
             if (item is null) return Results.NotFound();
             await library.ResolveAsync(item, ct);
             return Results.Json(MediaDto(item));
+        });
+
+        // ---- Преемник исчезнувшего содержимого ----------------------------------
+        // Для внешней библиотеки (ремап): если по последнему известному пути файла
+        // {id} теперь лежит другое содержимое (докачка/перезапись), отдаёт его
+        // текущий id. 404 — путь неизвестен, файла нет или содержимое прежнее.
+        app.MapGet("/api/media/{id}/successor", (string id) =>
+        {
+            var successor = library.FindSuccessor(id);
+            return successor is null ? Results.NotFound() : Results.Json(new { id = successor });
         });
 
         // ---- HLS: master-плейлист (вариант видео + рендиции аудио/субтитров) ---
@@ -343,22 +335,23 @@ public static class PrismHostApp
     }
 
     // --------------------------------------------------------------------------
-    // DTO записи медиа-библиотеки для клиента. streamUrl — относительный путь,
-    // клиент дополняет его базовым URL сервера.
-    // Базовые поля записи (ядро). Плагины через IMediaMetaSource могут добавить/
-    // переопределить произвольные ключи (напр. "title" из метаданных библиотеки).
+    // DTO записи медиа-библиотеки. streamUrl — относительный путь: клиенты ходят
+    // к хосту через библиотеку, и абсолютный адрес подставляет она (HostCatalog),
+    // зная, какому хосту запись принадлежит.
     private static Dictionary<string, object?> MediaDto(MediaItem it) => new()
     {
         ["id"] = it.Id,
         ["title"] = it.DisplayName,
         ["fileName"] = it.FileName,
+        ["relativePath"] = it.RelativePath,
         ["streamType"] = it.Mode switch
         {
             PlaybackMode.Transcode => "hls",
             PlaybackMode.Direct => "direct",
+            PlaybackMode.Pending => "pending",
             _ => "unsupported",
         },
-        ["playable"] = it.Mode != PlaybackMode.Unsupported,
+        ["playable"] = it.Mode is PlaybackMode.Transcode or PlaybackMode.Direct,
         ["streamUrl"] = it.Mode switch
         {
             PlaybackMode.Transcode => $"/hls/{it.Id}/playlist.m3u8",
@@ -383,24 +376,6 @@ public static class PrismHostApp
         }),
         ["statusMessage"] = it.StatusMessage,
     };
-
-    // Подмешивает в записи доп. поля от зарегистрированных источников метаданных.
-    // Без источников — no-op (поведение ядра не меняется).
-    private static async Task ApplyMetaAsync(IReadOnlyList<IMediaMetaSource> sources,
-        Dictionary<string, Dictionary<string, object?>> byId, CancellationToken ct)
-    {
-        if (sources.Count == 0 || byId.Count == 0) return;
-        var ids = byId.Keys.ToArray();
-        foreach (var src in sources)
-        {
-            IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> meta;
-            try { meta = await src.GetMetaAsync(ids, ct); }
-            catch { continue; } // плагин не должен ломать выдачу библиотеки
-            foreach (var (id, fields) in meta)
-                if (byId.TryGetValue(id, out var dto))
-                    foreach (var (k, v) in fields) dto[k] = v;
-        }
-    }
 
     private static void ApplyCommandLine(string[] args, PlayerOptions options)
     {

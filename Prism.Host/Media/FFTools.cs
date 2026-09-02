@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -11,6 +12,11 @@ namespace Prism.Host.Media;
 public sealed class FFTools
 {
     private readonly ILogger<FFTools> _logger;
+
+    // Списки компонентов ffmpeg (декодеры/кодировщики) не меняются за время жизни
+    // процесса — бинарь один и тот же. Разобранный список кэшируется по флагу,
+    // чтобы resolve каждого файла не запускал «ffmpeg -decoders» заново.
+    private readonly ConcurrentDictionary<string, Lazy<Task<HashSet<string>?>>> _components = new();
 
     public string? FfmpegPath { get; }
     public string? FfprobePath { get; }
@@ -97,9 +103,27 @@ public sealed class FFTools
         if (FfmpegPath is null || string.IsNullOrWhiteSpace(name))
             return false;
 
+        // Список намеренно читается без привязки к токену запроса: результат общий
+        // для всех вызовов (как ffprobe в ResolveCoreAsync).
+        var ffmpeg = FfmpegPath;
+        var set = await _components
+            .GetOrAdd(listFlag, f => new Lazy<Task<HashSet<string>?>>(() => ListComponentsAsync(ffmpeg, f)))
+            .Value;
+
+        if (set is null)
+        {
+            // Запуск ffmpeg не удался — неудачу не кэшируем, следующий вызов попробует снова.
+            _components.TryRemove(listFlag, out _);
+            return false;
+        }
+        return set.Contains(name);
+    }
+
+    private async Task<HashSet<string>?> ListComponentsAsync(string ffmpegPath, string listFlag)
+    {
         try
         {
-            var psi = new ProcessStartInfo(FfmpegPath)
+            var psi = new ProcessStartInfo(ffmpegPath)
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -111,23 +135,25 @@ public sealed class FFTools
             psi.ArgumentList.Add(listFlag);
 
             using var proc = Process.Start(psi)!;
-            var output = await proc.StandardOutput.ReadToEndAsync(ct);
-            await proc.WaitForExitAsync(ct);
+            var output = await proc.StandardOutput.ReadToEndAsync();
+            await proc.WaitForExitAsync();
 
             // Строки выглядят так: " V..... h264   H.264 / AVC ..." — имя во 2-й колонке.
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var line in output.Split('\n'))
             {
                 var parts = line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 2 && parts[0].Length >= 1 &&
-                    string.Equals(parts[1], name, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                if (parts.Length >= 2 && parts[0].Length >= 1)
+                    names.Add(parts[1]);
             }
+
+            _logger.LogDebug("Получен список компонентов ffmpeg {flag}: {count}", listFlag, names.Count);
+            return names;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Не удалось получить список компонентов ffmpeg ({flag})", listFlag);
+            return null;
         }
-
-        return false;
     }
 }

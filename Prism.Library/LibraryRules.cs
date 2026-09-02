@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Prism.Plugins.Library;
+namespace Prism.Library;
 
 /// <summary>
 /// Правило автозаполнения из конфига (секция "Library:Rules"). Шаблон пути

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <!-- Библиотека сервера Prism: вся логика (медиа, HLS, плагины, эндпоинты).
+    <!-- Сборка-библиотека сервера Prism: вся логика (медиа, HLS, эндпоинты).
          Запускаемые обёртки — Prism.Host.Console и Prism.Host.Service. -->
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -25,7 +25,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Prism.Abstractions\Prism.Abstractions.csproj" />
         <ProjectReference Include="..\Prism.Common\Prism.Common.csproj" />
     </ItemGroup>
 

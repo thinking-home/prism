@@ -1,54 +1,60 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Prism.Abstractions;
-using ThinkingHome.Migrator;
 
-namespace Prism.Plugins.Library;
+namespace Prism.Library;
 
 /// <summary>
-/// Плагин библиотеки: виртуальное дерево групп, членство файлов (по ключу
-/// содержимого) и свободная мета ключ-значение для файлов и групп. Провайдер и
-/// строка подключения берутся из конфига (секция "Database"); код про конкретную
-/// СУБД не знает. Схему создаёт мигратор.
+/// HTTP API библиотеки: дерево групп, членство файлов (по ключу содержимого),
+/// свободная мета ключ-значение файлов и групп, обслуживание и сборка мусора.
+/// Перенесено из плагина Prism.Plugins.Library без изменения семантики; пути
+/// ручек сохранены — клиенты переезжают со сменой только базового URL.
 /// </summary>
-public sealed class LibraryModule : IPrismModule
+public static class LibraryEndpoints
 {
-    public void ConfigureServices(IServiceCollection services, IConfiguration config)
+    public static void MapLibraryEndpoints(this IEndpointRouteBuilder app)
     {
-        var provider = config["Database:Provider"] ?? "sqlite";
-        var connectionString = ResolveConnectionString(provider, config);
-
-        // Схему ведёт мигратор (ключ prism.library) — независимо от СУБД.
-        using (var migrator = new Migrator(provider, connectionString, typeof(LibraryModule).Assembly))
-            migrator.Migrate(-1);
-
-        // Единственное место, знающее про конкретный провайдер EF.
-        services.AddDbContextFactory<LibraryDbContext>(o =>
+        // ---- Агрегированный каталог: слияние хостов + мета ------------------------
+        // DTO хостов отдаются как есть (абсолютные streamUrl, host/hostUrl —
+        // см. HostCatalog), сверху подмешивается мета из БД: ключи меты побеждают
+        // одноимённые поля хоста (например, title) — как было у плагина.
+        app.MapGet("/api/media",
+            async (HostCatalog catalog, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
-            if (provider == "postgres") o.UseNpgsql(connectionString);
-            else o.UseSqlite(connectionString);
+            var items = await catalog.GetMergedAsync(ct);
+
+            await using var db = await factory.CreateDbContextAsync(ct);
+            // Вся мета файлов одним запросом: библиотека домашняя, а фильтр по
+            // сотням id раздул бы SQL сильнее, чем таблица.
+            var meta = await db.Meta.Where(m => m.EntityType == MetaEntity.File).ToListAsync(ct);
+            var metaById = meta.ToLookup(m => m.EntityKey);
+            foreach (var item in items)
+                foreach (var m in metaById[item.Id])
+                    item.Dto[m.Key] = m.Value;
+
+            return Results.Json(items.Select(i => i.Dto));
         });
 
-        services.AddSingleton<IMediaMetaSource, MetadataMetaSource>();
-        // Фоновое обслуживание (при старте и периодически): ремап записей на новый id
-        // при смене содержимого + правила автозаполнения для нетронутых файлов.
-        // Синглтон + hosted-обёртка: тот же экземпляр дёргает ручка /api/library/scan.
-        services.AddSingleton<LibraryMaintenanceService>();
-        services.AddHostedService(sp => sp.GetRequiredService<LibraryMaintenanceService>());
-    }
+        // ---- Карточка одного файла (адресно через бухгалтерию «id → хост») -------
+        app.MapGet("/api/media/{id}",
+            async (string id, HostCatalog catalog, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
+        {
+            var dto = await catalog.GetItemAsync(id, ct);
+            if (dto is null) return Results.NotFound();
 
-    public void MapEndpoints(IEndpointRouteBuilder app)
-    {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var meta = await db.Meta
+                .Where(m => m.EntityType == MetaEntity.File && m.EntityKey == id)
+                .ToListAsync(ct);
+            foreach (var m in meta)
+                dto[m.Key] = m.Value;
+
+            return Results.Json(dto);
+        });
+
         // ---- Всё дерево одним запросом: группы (с метой) + членство --------------
         // Библиотека домашняя — пагинация не нужна, дерево строит клиент.
-        // present=false — запись о файле, которого сейчас нет на диске (осиротевшая):
-        // это штатное состояние, автоматически такие записи не удаляются (см. gc).
+        // present=false — запись о файле, которого сейчас нет ни на одном доступном
+        // хосте (файла нет на диске или хост недоступен — одно состояние): это
+        // штатно, автоматически такие записи не удаляются (см. gc).
         app.MapGet("/api/library/tree",
             async (IDbContextFactory<LibraryDbContext> factory, IMediaIdentity identity, CancellationToken ct) =>
         {
@@ -151,7 +157,7 @@ public sealed class LibraryModule : IPrismModule
 
         // ---- Членство файлов в группах -------------------------------------------
         // Существование файла не проверяется намеренно: осиротевшие связи — штатное
-        // состояние (диск отключён, файл переезжает); чистка — явной командой (gc).
+        // состояние (хост отключён, файл переезжает); чистка — явной командой (gc).
         app.MapPut("/api/library/nodes/{id:guid}/items/{mediaId}",
             async (Guid id, string mediaId, IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
         {
@@ -181,7 +187,7 @@ public sealed class LibraryModule : IPrismModule
 
         // ---- Мета файла (id файла и есть ключ содержимого) -----------------------
         // Существование файла не проверяется — мету можно класть и «впрок»
-        // (например, до подключения диска); осиротевшую уберёт gc.
+        // (например, до подключения хоста); осиротевшую уберёт gc.
         app.MapPut("/api/media/{id}/meta",
             async (string id, Dictionary<string, string?> input,
                 IDbContextFactory<LibraryDbContext> factory, CancellationToken ct) =>
@@ -223,20 +229,16 @@ public sealed class LibraryModule : IPrismModule
         });
 
         // ---- Прогнать обслуживание немедленно -------------------------------------
-        // Список файлов и так пересканируется каждым запросом; эта ручка будит
-        // фоновый цикл (ремап + правила автозаполнения), чтобы не ждать 5-минутный
+        // Будит фоновый цикл (ремап + правила автозаполнения), чтобы не ждать
         // таймер — например, сразу после добавления файлов. Завершения не ждёт:
-        // итоги прохода пишутся в лог хоста.
-        // ?replace=true — режим отладки правил: библиотека очищается здесь же (это
-        // несколько DELETE, ждать нечего), а дальше обычный проход раскладывает её
-        // заново. Поэтому замена возможна только с ручки: фоновый цикл про неё не
-        // знает и сам ничего не удаляет.
-        app.MapPost("/api/library/scan",
-            async (LibraryMaintenanceService maintenance, IDbContextFactory<LibraryDbContext> factory,
-                ILoggerFactory loggers, bool? replace, CancellationToken ct) =>
+        // итоги прохода пишутся в лог.
+        // ?replace=true — режим отладки правил: очистку выполняет сам цикл в начале
+        // следующего прохода. Чистить здесь нельзя: проход мог уже идти, и удаление
+        // из-под него оставляло группы с несуществующим родителем и членство на
+        // удалённые id (у прохода в кэше остаются id только что удалённых групп).
+        app.MapPost("/api/library/scan", (LibraryMaintenanceService maintenance, bool? replace) =>
         {
-            if (replace == true) await ClearLibraryAsync(factory, loggers.CreateLogger<LibraryModule>(), ct);
-            maintenance.RequestScan();
+            maintenance.RequestScan(replace == true);
             return Results.Accepted();
         });
 
@@ -251,35 +253,27 @@ public sealed class LibraryModule : IPrismModule
             var deadItems = (await db.NodeItems.ToListAsync(ct)).Where(i => !live.Contains(i.FileKey)).ToList();
             var deadMeta = (await db.Meta.Where(m => m.EntityType == MetaEntity.File).ToListAsync(ct))
                 .Where(m => !live.Contains(m.EntityKey)).ToList();
+            // Бухгалтерия «id → хост» мёртвых файлов тоже забывается: gc — это
+            // явное «забыть эти файлы», после него преемника искать не для чего.
+            var deadHosts = (await db.FileHosts.ToListAsync(ct)).Where(r => !live.Contains(r.FileKey)).ToList();
 
             db.NodeItems.RemoveRange(deadItems);
             db.Meta.RemoveRange(deadMeta);
+            db.FileHosts.RemoveRange(deadHosts);
             await db.SaveChangesAsync(ct);
-            return Results.Json(new { removedItems = deadItems.Count, removedMeta = deadMeta.Count });
+            return Results.Json(new
+            {
+                removedItems = deadItems.Count,
+                removedMeta = deadMeta.Count,
+                removedHostLinks = deadHosts.Count,
+            });
         });
     }
 
     // Полная очистка библиотеки: группы, членство и мета — и файлов, и групп.
     // Записи файлов, которых сейчас нет на диске, тоже удаляются: это отладка
     // правил, а не бережное обновление, поэтому мета такого файла не вернётся,
-    // пока его диск не подключат обратно.
-    private static async Task ClearLibraryAsync(IDbContextFactory<LibraryDbContext> factory,
-        ILogger logger, CancellationToken ct)
-    {
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var items = await db.NodeItems.ToListAsync(ct);
-        var meta = await db.Meta.ToListAsync(ct);
-        var nodes = await db.Nodes.ToListAsync(ct);
-
-        db.NodeItems.RemoveRange(items);
-        db.Meta.RemoveRange(meta);
-        db.Nodes.RemoveRange(nodes);
-        await db.SaveChangesAsync(ct);
-
-        logger.LogInformation("Библиотека очищена перед раскладкой: группы {nodes}, членство {items}, мета {meta}",
-            nodes.Count, items.Count, meta.Count);
-    }
-
+    // пока его хост/диск не подключат обратно.
     // Слияние меты: значение null удаляет ключ, остальные — вставка/замена.
     private static async Task MergeMetaAsync(LibraryDbContext db, string entityType, string entityKey,
         Dictionary<string, string?> input, CancellationToken ct)
@@ -306,22 +300,6 @@ public sealed class LibraryModule : IPrismModule
             }
         }
         await db.SaveChangesAsync(ct);
-    }
-
-    // Для SQLite относительный путь к файлу разрешаем относительно корня приложения
-    // (ContentRoot передаёт хост) и создаём папку. Для Postgres строку берём как есть.
-    private static string ResolveConnectionString(string provider, IConfiguration config)
-    {
-        var configured = config["Database:ConnectionString"];
-        if (provider != "sqlite")
-            return configured ?? throw new InvalidOperationException("Не задана Database:ConnectionString.");
-
-        var contentRoot = config["ContentRoot"] ?? Directory.GetCurrentDirectory();
-        var csb = new SqliteConnectionStringBuilder(configured ?? "Data Source=data/prism.db");
-        if (!Path.IsPathRooted(csb.DataSource))
-            csb.DataSource = Path.Combine(contentRoot, csb.DataSource);
-        Directory.CreateDirectory(Path.GetDirectoryName(csb.DataSource)!);
-        return csb.ConnectionString;
     }
 }
 

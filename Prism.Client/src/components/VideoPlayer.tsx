@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Box } from "@mantine/core";
 import Hls from "hls.js";
 import type { StreamType } from "../api";
 
@@ -12,7 +13,9 @@ export interface PlayerSubtitle {
 // Воспроизведение потока: HLS через hls.js (Chrome/Firefox/Edge) или нативно
 // (Safari), для direct — обычный src. Для HLS src — master-плейлист: аудиодорожки
 // переключаются внутри него самим плеером, без смены src и потери позиции.
-// Субтитры — как <track> (независимо от видео).
+// Субтитры — как <track> (независимо от видео), но в DOM живёт только выбранная
+// дорожка: браузер грузит <track> сразу, как тот появился, а извлечение каждой
+// дорожки стоит хосту отдельного прохода ffmpeg по всему файлу.
 export function VideoPlayer({
   src,
   type,
@@ -65,9 +68,9 @@ export function VideoPlayer({
     }
   }, [audioTrack, src]);
 
-  // Показ выбранной дорожки субтитров. Перебираем свои <track>, а не весь
-  // video.textTracks: у чужих дорожек (рендиции плеера) id пустой, а
-  // Number("") === 0 — и они включались бы заодно с нашей первой дорожкой.
+  // Показ выбранной дорожки. Своя дорожка в DOM одна, но перебираем именно
+  // свои <track>, а не весь video.textTracks: у чужих дорожек (рендиции плеера)
+  // id пустой, а Number("") === 0 — они включились бы заодно с дорожкой 0.
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
@@ -76,11 +79,31 @@ export function VideoPlayer({
     });
   }, [selectedSub, src, subtitles]);
 
+  // Только выбранная дорожка: при «Выкл» не грузится ни одна, при смене —
+  // ровно одна новая (ключ по индексу пересоздаёт элемент).
+  const active = subtitles.find((s) => s.index === selectedSub);
+
   return (
-    <video ref={ref} controls autoPlay playsInline crossOrigin="anonymous" className="player">
-      {subtitles.map((s) => (
-        <track key={s.index} id={String(s.index)} kind="subtitles" src={s.url} srcLang={s.lang} label={s.label} />
-      ))}
-    </video>
+    <Box
+      component="video"
+      ref={ref}
+      controls
+      autoPlay
+      playsInline
+      crossOrigin="anonymous"
+      w="100%"
+      bg="black"
+    >
+      {active && (
+        <track
+          key={active.index}
+          id={String(active.index)}
+          kind="subtitles"
+          src={active.url}
+          srcLang={active.lang}
+          label={active.label}
+        />
+      )}
+    </Box>
   );
 }

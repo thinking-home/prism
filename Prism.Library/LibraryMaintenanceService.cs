@@ -2,9 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Prism.Abstractions;
 
-namespace Prism.Plugins.Library;
+namespace Prism.Library;
 
 /// <summary>
 /// Фоновое обслуживание библиотеки (при старте, раз в 5 минут и по требованию —
@@ -25,6 +24,9 @@ namespace Prism.Plugins.Library;
 /// Ремап идёт строго первым: записи должны успеть переехать на новый id раньше,
 /// чем правила примут файл-преемник за нетронутый и заполнят его заново.
 /// Все проходы выполняет только этот цикл — параллельных проходов не бывает.
+/// Поэтому и очистка библиотеки (<c>scan?replace=true</c>) делается здесь, в
+/// начале прохода: из обработчика запроса она сносила группы прямо из-под
+/// работающего прохода, и тот дописывал строки на уже удалённые id.
 /// </summary>
 public sealed class LibraryMaintenanceService(
     IDbContextFactory<LibraryDbContext> factory,
@@ -42,10 +44,16 @@ public sealed class LibraryMaintenanceService(
     // запросы во время прохода схлопываются в один дополнительный проход.
     private readonly SemaphoreSlim _wake = new(0, 1);
 
+    // Запрошенная замена (scan?replace=true): очистку выполняет сам цикл в начале
+    // ближайшего прохода. 0/1 через Interlocked — ставит ручка, снимает цикл.
+    private int _replaceRequested;
+
     /// <summary>Будит цикл обслуживания, не дожидаясь таймера. Не ждёт завершения —
-    /// итоги прохода пишутся в лог.</summary>
-    public void RequestScan()
+    /// итоги прохода пишутся в лог. <paramref name="replace"/> — очистить библиотеку
+    /// перед раскладкой (режим отладки правил).</summary>
+    public void RequestScan(bool replace = false)
     {
+        if (replace) Interlocked.Exchange(ref _replaceRequested, 1);
         try { _wake.Release(); }
         catch (SemaphoreFullException) { /* проход уже запрошен */ }
     }
@@ -58,6 +66,9 @@ public sealed class LibraryMaintenanceService(
         {
             try
             {
+                if (Interlocked.Exchange(ref _replaceRequested, 0) == 1)
+                    await ClearLibraryAsync(ct);
+
                 var files = await identity.GetLiveFilesAsync(ct);
                 var remapped = await RemapAsync(files, ct);
                 var autofilled = await ApplyRulesAsync(files, ct);
@@ -213,6 +224,25 @@ public sealed class LibraryMaintenanceService(
             parent = id;
         }
         return parent;
+    }
+
+    // Очистка библиотеки перед раскладкой заново (scan?replace=true): группы,
+    // членство и мета — включая записи файлов, которых сейчас нет на хостах.
+    // Вызывается только из прохода, поэтому никто параллельно не пишет.
+    private async Task ClearLibraryAsync(CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var items = await db.NodeItems.ToListAsync(ct);
+        var meta = await db.Meta.ToListAsync(ct);
+        var nodes = await db.Nodes.ToListAsync(ct);
+
+        db.NodeItems.RemoveRange(items);
+        db.Meta.RemoveRange(meta);
+        db.Nodes.RemoveRange(nodes);
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Библиотека очищена перед раскладкой: группы {nodes}, членство {items}, мета {meta}",
+            nodes.Count, items.Count, meta.Count);
     }
 
     // Шаблоны пишутся без расширения файла — иначе каждый заканчивался бы «.mkv|.avi|…».

@@ -1,7 +1,7 @@
 using System.Data;
 using ThinkingHome.Migrator.Framework;
 
-namespace Prism.Plugins.Library.Migrations;
+namespace Prism.Library.Migrations;
 
 /// <summary>
 /// Идентификаторы групп становятся GUID: id генерируется кодом без обращения к БД,

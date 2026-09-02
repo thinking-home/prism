@@ -1,0 +1,154 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
+using Prism.Mqtt;
+using Serilog;
+using ThinkingHome.Migrator;
+
+namespace Prism.Library;
+
+/// <summary>
+/// Сборка и запуск сервиса библиотеки — общая точка входа для всех способов
+/// запуска (Prism.Library.Console, позже Prism.Library.Service). Сервис хранит
+/// дерево групп, мету и правила автозаполнения; файлы получает с хостов Prism
+/// (список — в конфиге), клиентам отдаёт агрегированный каталог и API плееров.
+/// </summary>
+public static class PrismLibraryApp
+{
+    public static void Run(WebApplicationOptions options, Action<WebApplicationBuilder>? configure = null)
+    {
+        var builder = WebApplication.CreateBuilder(options);
+        configure?.Invoke(builder);
+
+        // ---- Логи: та же схема, что у хоста (консоль + файлы с ротацией) -------
+        Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(builder.Configuration)
+            .WriteTo.Console()
+            .WriteTo.File(
+                Path.Combine(builder.Environment.ContentRootPath, "logs", "prism-library-.log"),
+                rollingInterval: RollingInterval.Day,
+                fileSizeLimitBytes: 32 * 1024 * 1024,
+                rollOnFileSizeLimit: true,
+                retainedFileCountLimit: 14)
+            .CreateLogger();
+        builder.Host.UseSerilog();
+
+        // ---- БД: провайдер и строка — из конфига, схему ведёт мигратор ---------
+        // (ключ версионирования prism.library — тот же, что был у плагина, поэтому
+        // существующая БД подхватывается без повторного прогона миграций).
+        var provider = builder.Configuration["Database:Provider"] ?? "sqlite";
+        var connectionString = ResolveConnectionString(
+            provider, builder.Configuration, builder.Environment.ContentRootPath);
+        using (var migrator = new Migrator(provider, connectionString, typeof(PrismLibraryApp).Assembly))
+            migrator.Migrate(-1);
+
+        // Единственное место, знающее про конкретный провайдер EF.
+        builder.Services.AddDbContextFactory<LibraryDbContext>(o =>
+        {
+            if (provider == "postgres") o.UseNpgsql(connectionString);
+            else o.UseSqlite(connectionString);
+        });
+
+        // Хосты Prism из конфига (секция "Hosts"): каталог — единственный
+        // опрашивающий компонент, бухгалтерия «id → хост» — общая память для
+        // адресных запросов (преемник, карточка), идентичность — контракт
+        // обслуживания поверх каталога.
+        var hosts = builder.Configuration.GetSection("Hosts").Get<HostEntry[]>() ?? [];
+        builder.Services.AddHttpClient();
+        builder.Services.AddSingleton<IReadOnlyList<HostEntry>>(hosts);
+        builder.Services.AddSingleton<FileHostLedger>();
+        builder.Services.AddSingleton<HostCatalog>();
+        builder.Services.AddSingleton<IMediaIdentity, HttpMediaIdentity>();
+
+        // Фоновое обслуживание (ремап + правила) — как в плагине: синглтон +
+        // hosted-обёртка, тот же экземпляр дёргает ручка /api/library/scan.
+        builder.Services.AddSingleton<LibraryMaintenanceService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<LibraryMaintenanceService>());
+
+        // Плееры: общий реестр Prism.Mqtt (retained info/state + публикация команд).
+        // Без настроенного брокера библиотека работает, /api/players отвечает 503.
+        var mqtt = builder.Configuration.GetSection("Mqtt").Get<BrokerOptions>() ?? new BrokerOptions();
+        builder.Services.AddSingleton(sp =>
+            new PlayerRegistry(mqtt, sp.GetRequiredService<ILogger<PlayerRegistry>>()));
+        builder.Services.AddHostedService<PlayerRegistryHost>();
+
+        // Веб-клиент в dev-режиме живёт на другом origin (Vite) — разрешаем CORS,
+        // как у хоста. Для домашней библиотеки это безопасно.
+        builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+            p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+
+        var app = builder.Build();
+        app.UseCors();
+
+        // ---- Веб-клиент: статику раздаёт сама библиотека -----------------------
+        // Собранный клиент (npm run build) лежит в папке Client:Path — по умолчанию
+        // wwwroot рядом с приложением, туда его положит инсталлятор. Клиент на
+        // hash-роутинге, поэтому SPA-фолбэк не нужен: все его маршруты — это "/".
+        // Папки нет — раздачи нет, API работает как прежде (так живёт запуск из
+        // исходников, где клиент поднимает Vite на своём порту).
+        var clientPath = ResolveClientPath(app.Configuration, app.Environment.ContentRootPath);
+        var clientPresent = Directory.Exists(clientPath);
+        if (clientPresent)
+        {
+            var clientFiles = new PhysicalFileProvider(clientPath);
+            app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = clientFiles });
+            app.UseStaticFiles(new StaticFileOptions { FileProvider = clientFiles });
+        }
+
+        app.MapLibraryEndpoints();
+        app.MapPlayerEndpoints();
+
+        app.Logger.LogInformation("БД                : {provider}", provider);
+        app.Logger.LogInformation("Хосты             : {hosts}",
+            hosts.Length == 0 ? "(не настроены)" : string.Join("; ", hosts.Select(h => $"{h.Name} = {h.BaseUrl}")));
+        app.Logger.LogInformation("MQTT              : {broker}",
+            string.IsNullOrWhiteSpace(mqtt.Address) ? "(не настроен — плееры отключены)" : $"{mqtt.Address}:{mqtt.Port}");
+        app.Logger.LogInformation("Веб-клиент        : {client}",
+            clientPresent ? clientPath : $"(нет папки {clientPath} — раздача выключена)");
+
+        try
+        {
+            app.Run();
+        }
+        finally
+        {
+            Log.CloseAndFlush(); // дописать хвост файла при остановке
+        }
+    }
+
+    // Hosted-обёртка: общий PlayerRegistry (Prism.Mqtt) про хостинг ASP.NET не
+    // знает — Start при старте приложения, Dispose сделает DI при остановке.
+    private sealed class PlayerRegistryHost(PlayerRegistry registry) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            registry.Start();
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    // Папка с собранным веб-клиентом: относительный путь — от корня приложения.
+    private static string ResolveClientPath(IConfiguration config, string contentRoot)
+    {
+        var configured = config["Client:Path"];
+        if (string.IsNullOrWhiteSpace(configured)) configured = "wwwroot";
+        return Path.IsPathRooted(configured) ? configured : Path.Combine(contentRoot, configured);
+    }
+
+    // Для SQLite относительный путь к файлу разрешаем относительно корня приложения
+    // и создаём папку. Для Postgres строку берём как есть.
+    private static string ResolveConnectionString(string provider, IConfiguration config, string contentRoot)
+    {
+        var configured = config["Database:ConnectionString"];
+        if (provider != "sqlite")
+            return configured ?? throw new InvalidOperationException("Не задана Database:ConnectionString.");
+
+        var csb = new SqliteConnectionStringBuilder(configured ?? "Data Source=data/prism.db");
+        if (!Path.IsPathRooted(csb.DataSource))
+            csb.DataSource = Path.Combine(contentRoot, csb.DataSource);
+        Directory.CreateDirectory(Path.GetDirectoryName(csb.DataSource)!);
+        return csb.ConnectionString;
+    }
+}

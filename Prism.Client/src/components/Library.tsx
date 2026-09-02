@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { Alert, Badge, Group, Loader, NavLink, Stack, Text } from "@mantine/core";
+import { FilePlay, FileX, Folder } from "lucide-react";
 import { api } from "../api";
-import type { LibraryTree, MediaItem } from "../api";
+import type { LibraryTree, MediaItem, StreamType } from "../api";
 import { useServerUrl } from "../serverUrl";
 
 // Узел дерева для отрисовки: группы, файлы внутри группы и записи о файлах,
-// которых сейчас нет на диске (в /api/media их нет — только id из членства).
+// которых сейчас нет ни на одном доступном хосте (в /api/media их нет — только
+// id из членства).
 interface TreeNode {
   id: string;
   name: string;
@@ -31,34 +34,42 @@ export function Library() {
     return () => ac.abort();
   }, [serverUrl]);
 
-  if (error) return <p className="muted">Не удалось загрузить библиотеку: {error}</p>;
-  if (!data) return <p className="muted">Загрузка…</p>;
+  if (error)
+    return (
+      <Alert color="red" title="Не удалось загрузить библиотеку">
+        {error}
+      </Alert>
+    );
+  if (!data)
+    return (
+      <Group justify="center" py="xl">
+        <Loader />
+      </Group>
+    );
 
   const { roots, ungrouped, missingCount, groupedCount } = build(data.tree, data.items);
 
   if (data.items.length === 0 && missingCount === 0)
-    return <p className="muted">Медиафайлы не найдены. Положите видео в папку сервера и обновите.</p>;
+    return <Text c="dimmed">Медиафайлы не найдены. Положите видео в папку хоста и обновите.</Text>;
 
   return (
-    <>
-      <div className="tree-summary muted">
+    <Stack gap="xs">
+      <Text size="sm" c="dimmed">
         файлов: {data.items.length} · в группах: {groupedCount} · вне групп: {ungrouped.length}
         {missingCount > 0 && ` · нет на диске: ${missingCount}`}
-      </div>
+      </Text>
 
-      <div className="tree">
-        {roots.map((n) => (
-          <NodeView key={n.id} node={n} />
+      {roots.map((n) => (
+        <NodeView key={n.id} node={n} />
+      ))}
+
+      {ungrouped.length > 0 &&
+        (roots.length === 0 ? (
+          ungrouped.map((f) => <FileRow key={f.id} item={f} />)
+        ) : (
+          <NodeView node={{ id: "~", name: "Вне групп", children: [], files: ungrouped, missing: [] }} />
         ))}
-
-        {ungrouped.length > 0 &&
-          (roots.length === 0 ? (
-            ungrouped.map((f) => <FileRow key={f.id} item={f} />)
-          ) : (
-            <NodeView node={{ id: "~", name: "Вне групп", children: [], files: ungrouped, missing: [] }} />
-          ))}
-      </div>
-    </>
+    </Stack>
   );
 }
 
@@ -113,57 +124,74 @@ function countFiles(node: TreeNode): number {
 }
 
 // Группы свёрнуты: у домашней библиотеки их десятки, и обзор важнее содержимого.
-// <details> хранит состояние сам — своего кода на раскрытие не нужно.
+// NavLink хранит состояние раскрытия сам — своего кода на это не нужно.
+// Счётчик файлов идёт меткой сразу за названием, а правая секция остаётся за
+// шевроном NavLink: он там по умолчанию и разворачивается при раскрытии.
 function NodeView({ node }: { node: TreeNode }) {
   return (
-    <details className="tree-node">
-      <summary>
-        <span className="tree-name">{node.name}</span>
-        <span className="tree-count">{countFiles(node)}</span>
-      </summary>
-      <div className="tree-children">
-        {node.children.map((c) => (
-          <NodeView key={c.id} node={c} />
-        ))}
-        {node.files.map((f) => (
-          <FileRow key={f.id} item={f} />
-        ))}
-        {node.missing.map((id) => (
-          <div key={id} className="tree-file missing" title={`Файла нет на диске (id ${id})`}>
-            <span className="tree-name">нет на диске</span>
-            <span className="badge unsupported">отсутствует</span>
-          </div>
-        ))}
-      </div>
-    </details>
+    <NavLink
+      leftSection={<Folder size={16} />}
+      label={
+        <Group gap="xs">
+          {node.name}
+          <Badge variant="default" size="sm">
+            {countFiles(node)}
+          </Badge>
+        </Group>
+      }
+      childrenOffset={28}
+    >
+      {node.children.map((c) => (
+        <NodeView key={c.id} node={c} />
+      ))}
+      {node.files.map((f) => (
+        <FileRow key={f.id} item={f} />
+      ))}
+      {node.missing.map((id) => (
+        <NavLink
+          key={id}
+          disabled
+          leftSection={<FileX size={16} />}
+          label="нет на диске"
+          description={`id ${id}`}
+          rightSection={<Badge color="red" variant="light">отсутствует</Badge>}
+        />
+      ))}
+    </NavLink>
   );
 }
 
-function FileRow({ item }: { item: MediaItem }) {
-  const badge =
-    item.streamType === "direct" ? (
-      <span className="badge direct">прямой</span>
-    ) : item.streamType === "hls" ? (
-      <span className="badge transcode">транскод</span>
-    ) : (
-      <span className="badge unsupported">недоступно</span>
-    );
+// Бейдж режима воспроизведения: pending — файл найден сканом, но хост ещё не
+// прочитал метаданные; это штатное промежуточное состояние, а не ошибка.
+const BADGES: Record<StreamType, { color: string; text: string }> = {
+  direct: { color: "green", text: "прямой" },
+  hls: { color: "blue", text: "транскод" },
+  pending: { color: "yellow", text: "разбирается" },
+  unsupported: { color: "red", text: "недоступно" },
+};
 
-  const inner = (
-    <>
-      <span className="tree-name">{item.title}</span>
-      <span className="tree-file-name">{item.fileName}</span>
-      {badge}
-    </>
-  );
+function FileRow({ item }: { item: MediaItem }) {
+  const badge = BADGES[item.streamType];
+  const hint =
+    item.statusMessage ??
+    (item.streamType === "pending" ? "Хост читает метаданные файла" : undefined);
+
+  // Тип component у NavLink полиморфный, поэтому играбельная и неиграбельная
+  // строки — две разные ветки, а не один элемент с вычисляемым component.
+  const props = {
+    leftSection: <FilePlay size={16} />,
+    label: item.title,
+    description: hint ? `${item.fileName} — ${hint}` : item.fileName,
+    rightSection: (
+      <Badge color={badge.color} variant="light">
+        {badge.text}
+      </Badge>
+    ),
+  };
 
   return item.playable ? (
-    <Link to={`/watch/${item.id}`} className="tree-file">
-      {inner}
-    </Link>
+    <NavLink component={Link} to={`/watch/${item.id}`} {...props} />
   ) : (
-    <div className="tree-file disabled" title={item.statusMessage ?? undefined}>
-      {inner}
-    </div>
+    <NavLink disabled {...props} />
   );
 }

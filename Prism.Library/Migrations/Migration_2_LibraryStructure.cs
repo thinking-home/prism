@@ -1,7 +1,7 @@
 using System.Data;
 using ThinkingHome.Migrator.Framework;
 
-namespace Prism.Plugins.Library.Migrations;
+namespace Prism.Library.Migrations;
 
 /// <summary>
 /// Структурирование библиотеки: дерево групп (Prism_Node), членство файлов по

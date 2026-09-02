@@ -4,7 +4,7 @@ using ThinkingHome.Migrator.Framework;
 // Ключ версионирования миграций этой библиотеки — своя история версий в общей БД.
 [assembly: MigrationAssembly("prism.library")]
 
-namespace Prism.Plugins.Library.Migrations;
+namespace Prism.Library.Migrations;
 
 /// <summary>Создание таблицы метаданных. Плоское имя с префиксом Prism_, без схемы —
 /// одинаково на SQLite и Postgres.</summary>
