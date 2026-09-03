@@ -3,4 +3,7 @@
      Язык выбирается автоматически по языку системы. -->
 <resources>
     <string name="hello_world">Hello World</string>
+    <string name="settings_library_url">Prism library address</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_url_required">Enter the library address</string>
 </resources>
