@@ -3,4 +3,7 @@
 plugins {
     id("com.android.application") version "8.10.0" apply false
     id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+    // Плагин kotlinx.serialization — генерирует код разбора JSON для классов,
+    // помеченных @Serializable (см. Models.kt).
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21" apply false
 }

@@ -2,6 +2,9 @@
 <!-- Манифест — «паспорт» приложения: что за приложение и из чего состоит. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Разрешение выходить в сеть — нужно для запросов к библиотеке Prism. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Android TV: поддержка leanback и отсутствие требования тачскрина
          (иначе на ТВ приложение считается несовместимым). -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -11,7 +14,8 @@
         android:label="Prism Library"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="true"><!-- разрешить http:// (Prism без https) -->
 
         <!-- Главный экран приложения. -->
         <activity

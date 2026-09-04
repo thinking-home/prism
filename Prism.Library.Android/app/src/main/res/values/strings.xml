@@ -2,8 +2,9 @@
 <!-- Строки по умолчанию (английский). Русские — в values-ru/strings.xml.
      Язык выбирается автоматически по языку системы. -->
 <resources>
-    <string name="hello_world">Hello World</string>
     <string name="settings_library_url">Prism library address</string>
     <string name="settings_save">Save</string>
     <string name="settings_url_required">Enter the library address</string>
+    <string name="library_loading">Loading library…</string>
+    <string name="library_error">Error: %1$s</string>
 </resources>

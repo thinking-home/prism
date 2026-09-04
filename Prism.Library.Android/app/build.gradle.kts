@@ -2,6 +2,7 @@
 plugins {
     id("com.android.application")       // это Android-приложение
     id("org.jetbrains.kotlin.android")  // на языке Kotlin
+    id("org.jetbrains.kotlin.plugin.serialization") // разбор JSON-ответов библиотеки
 }
 
 android {
@@ -26,4 +27,14 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+// Подключаемые библиотеки.
+dependencies {
+    // RecyclerView — список содержимого текущей папки.
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    // OkHttp — HTTP-запросы к Prism.Library (дерево, каталог файлов).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // kotlinx.serialization — разбор JSON-ответов в модели данных (Models.kt).
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 }
