@@ -7,4 +7,6 @@
     <string name="settings_url_required">Enter the library address</string>
     <string name="library_loading">Loading library…</string>
     <string name="library_error">Error: %1$s</string>
+    <string name="library_empty">This folder is empty</string>
+    <string name="library_root_title">Library root</string>
 </resources>

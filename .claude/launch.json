@@ -4,16 +4,45 @@
     {
       "name": "prism-client",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "Prism.Client",
       "port": 5173
     },
     {
       "name": "prism-docs",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5174"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5174"
+      ],
       "cwd": "docs",
       "port": 5174
+    },
+    {
+      "name": "prism-host",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--no-build"
+      ],
+      "cwd": "Prism.Host.Console",
+      "port": 8080
+    },
+    {
+      "name": "prism-library",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--no-build"
+      ],
+      "cwd": "Prism.Library.Console",
+      "port": 8081
     }
   ]
 }

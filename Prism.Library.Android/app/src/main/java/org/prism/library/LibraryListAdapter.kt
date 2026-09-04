@@ -16,9 +16,13 @@ sealed class LibraryListItem {
 
 // Адаптер RecyclerView: превращает список LibraryListItem в строки экрана.
 // Строка — обычный TextView, созданный кодом (без XML-разметки — так собран
-// весь остальной интерфейс приложения).
-class LibraryListAdapter(private val items: List<LibraryListItem>) :
-    RecyclerView.Adapter<LibraryListAdapter.ViewHolder>() {
+// весь остальной интерфейс приложения). onGroupClick вызывается при выборе
+// строки-группы — переход внутрь неё делает MainActivity (стек папок).
+// У файлов действий пока нет — они появятся на следующих шагах (шаги 6–7).
+class LibraryListAdapter(
+    private val items: List<LibraryListItem>,
+    private val onGroupClick: (LibraryNode) -> Unit,
+) : RecyclerView.Adapter<LibraryListAdapter.ViewHolder>() {
 
     class ViewHolder(val text: TextView) : RecyclerView.ViewHolder(text)
 
@@ -27,6 +31,8 @@ class LibraryListAdapter(private val items: List<LibraryListItem>) :
         val pad = (16 * context.resources.displayMetrics.density).toInt()
         val text = TextView(context).apply {
             setPadding(pad, pad, pad, pad)
+            // Отступ между иконкой строки (папка/файл) и текстом названия.
+            compoundDrawablePadding = pad
             textSize = 18f
             // focusable — обязательно для пульта: без этого D-pad не сможет
             // перевести выделение на строку списка (см. design.md).
@@ -40,11 +46,23 @@ class LibraryListAdapter(private val items: List<LibraryListItem>) :
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        // Иконка слева от текста строки — компактный способ показать значок
+        // без отдельного ImageView в разметке (вся разметка строки — один
+        // TextView, см. onCreateViewHolder).
         when (val item = items[position]) {
-            // 📁 — группа (подпапка); переход внутрь появится на следующем шаге.
-            is LibraryListItem.Group -> holder.text.text = "📁 ${item.node.name}"
-            // 🎬 — файл; недоступные (present=false) файлы появятся на шаге 5.
-            is LibraryListItem.File -> holder.text.text = "🎬 ${item.media.title}"
+            // Группа (подпапка): клик/центр пульта заходит внутрь неё.
+            is LibraryListItem.Group -> {
+                holder.text.text = item.node.name
+                holder.text.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_folder, 0, 0, 0)
+                holder.text.setOnClickListener { onGroupClick(item.node) }
+            }
+            // Файл; недоступные (present=false) файлы появятся на шаге 5,
+            // действия с файлом (информация, запуск на плеере) — шаги 6–7.
+            is LibraryListItem.File -> {
+                holder.text.text = item.media.title
+                holder.text.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_file, 0, 0, 0)
+                holder.text.setOnClickListener(null)
+            }
         }
     }
 

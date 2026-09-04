@@ -5,4 +5,6 @@
     <string name="settings_url_required">Введите адрес библиотеки</string>
     <string name="library_loading">Загрузка библиотеки…</string>
     <string name="library_error">Ошибка: %1$s</string>
+    <string name="library_empty">Папка пуста</string>
+    <string name="library_root_title">Корень библиотеки</string>
 </resources>
