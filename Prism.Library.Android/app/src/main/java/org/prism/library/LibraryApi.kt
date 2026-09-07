@@ -1,5 +1,6 @@
 package org.prism.library
 
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import java.io.IOException
@@ -10,10 +11,16 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-// Минимальный HTTP-клиент библиотеки Prism: два запроса, нужных для показа
-// содержимого папки. Запросы асинхронные (OkHttp сам уводит их в фоновый
-// поток), результат приходит в переданный обработчик уже на UI-потоке — его
-// можно сразу использовать для обновления экрана.
+// Код ответа неуспешного HTTP-запроса — отдельный тип исключения вместо
+// обычного IOException с текстом "HTTP 404" в сообщении: вызывающему коду
+// (например, обработке 404 у карточки файла, шаг 6) он нужен как число, а не
+// как текст, который пришлось бы разбирать обратно.
+class HttpStatusException(val code: Int) : IOException("HTTP $code")
+
+// Минимальный HTTP-клиент библиотеки Prism: запросы, нужные для показа
+// содержимого папки и карточки файла. Запросы асинхронные (OkHttp сам уводит
+// их в фоновый поток), результат приходит в переданный обработчик уже на
+// UI-потоке — его можно сразу использовать для обновления экрана.
 object LibraryApi {
 
     // Один клиент на всё приложение — так рекомендует сама OkHttp (внутри
@@ -32,6 +39,17 @@ object LibraryApi {
     // GET /api/media — объединённый каталог файлов, видимых сейчас хотя бы на одном хосте.
     fun getMedia(baseUrl: String, onResult: (Result<List<MediaCard>>) -> Unit) {
         get(baseUrl, "/api/media", onResult) { json.decodeFromString(it) }
+    }
+
+    // GET /api/media/{id} — подробная карточка одного файла (для шторки
+    // «информация», шаг 6). 404 означает, что файл сейчас недоступен ни на
+    // одном хосте — вызывающий код различает эту причину ошибки по
+    // HttpStatusException.code, а не по тексту сообщения.
+    fun getMediaDetail(baseUrl: String, id: String, onResult: (Result<MediaDetail>) -> Unit) {
+        // Uri.encode — id файла может содержать символы, недопустимые прямо в
+        // пути URL (например, пробелы), в отличие от путей getTree/getMedia,
+        // которые фиксированы и такой проблемы не имеют.
+        get(baseUrl, "/api/media/${Uri.encode(id)}", onResult) { json.decodeFromString(it) }
     }
 
     // Общая часть обоих запросов: выполнить GET, разобрать тело парсером,
@@ -68,7 +86,7 @@ object LibraryApi {
             override fun onResponse(call: Call, response: Response) {
                 val result = try {
                     response.use {
-                        if (!it.isSuccessful) throw IOException("HTTP ${it.code}")
+                        if (!it.isSuccessful) throw HttpStatusException(it.code)
                         val body = it.body?.string() ?: throw IOException("Empty response body")
                         Result.success(parse(body))
                     }

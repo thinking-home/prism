@@ -1,6 +1,5 @@
 package org.prism.library
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.TypedValue
@@ -10,13 +9,22 @@ import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
+import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
 // Главный экран приложения: список содержимого текущей папки библиотеки, с
 // переходом внутрь групп и подъёмом наверх (аналог проводника, без дерева на
 // экране), плюс кнопка-шестерёнка для перехода к настройке адреса.
-class MainActivity : Activity() {
+//
+// FragmentActivity (не обычный Activity, как раньше) — нужен, чтобы показывать
+// шторку с информацией о файле (BottomSheetDialogFragment, шаг 6): ей нужен
+// FragmentManager хозяйской Activity. Пока шторка открыта, она сама
+// перехватывает системную кнопку «назад» (закрывает себя, а не поднимается по
+// папке) — это стандартное поведение диалогов, обработчик ниже в этот момент
+// не вызывается.
+class MainActivity : FragmentActivity() {
 
     private lateinit var headerText: TextView
     private lateinit var statusText: TextView
@@ -141,6 +149,26 @@ class MainActivity : Activity() {
         }
 
         setContentView(root)
+
+        // Системная кнопка «назад»: если мы не в корне — поднимаемся на
+        // уровень выше вместо выхода из приложения; в корне — обычное
+        // поведение (выход). OnBackPressedCallback — текущий рекомендованный
+        // способ перехватить «назад» (замена устаревшего Activity.onBackPressed);
+        // isEnabled оставляем true всегда: пусть при пустом стеке колбэк молча
+        // ничего не делает, а обычный выход обеспечивает системный поведение по
+        // умолчанию через отдельный проход диспетчера (см. goUp/false ниже).
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!goUp()) {
+                    // Мы в корне — поднять некуда. Отключаем себя и повторяем
+                    // «назад» уже без этого колбэка, чтобы сработало обычное
+                    // системное поведение (выход из приложения).
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
     }
 
     // onStart вызывается каждый раз, когда экран становится видимым — в том
@@ -171,14 +199,6 @@ class MainActivity : Activity() {
         nodeStack.clear()
         updateHeader()
         loadFolder()
-    }
-
-    // Системная кнопка «назад»: если мы не в корне — поднимаемся на уровень
-    // выше вместо выхода из приложения; в корне — обычное поведение (выход).
-    // Отдельной кнопки/стрелки «наверх» в интерфейсе нет — это единственный
-    // способ подняться по папке (решение design.md).
-    override fun onBackPressed() {
-        if (!goUp()) super.onBackPressed()
     }
 
     // Переход внутрь группы — вызывается адаптером при выборе строки-группы.
@@ -271,8 +291,17 @@ class MainActivity : Activity() {
         } else {
             statusText.visibility = View.GONE
             list.visibility = View.VISIBLE
-            list.adapter = LibraryListAdapter(items, ::openGroup)
+            list.adapter = LibraryListAdapter(items, ::openGroup, ::showFileInfo)
         }
+    }
+
+    // Действие «информация» у файла (шаг 6): открывает шторку снизу с
+    // карточкой файла поверх текущего списка папки, который остаётся открытым
+    // под ней (media-actions/spec.md, «Открытие шторки с информацией»).
+    // Показывается и для недоступных файлов — тогда шторка сама покажет
+    // сообщение о недоступности (см. MediaInfoBottomSheet).
+    private fun showFileInfo(media: MediaCard) {
+        MediaInfoBottomSheet.show(supportFragmentManager, libraryUrl, media.id)
     }
 
     // Показывает текстовое сообщение (загрузка/ошибка/пусто) вместо списка.

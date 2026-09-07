@@ -12,4 +12,13 @@
     <!-- Показывается вместо обычного названия файла, если он сейчас
          недоступен ни на одном хосте (present:false). -->
     <string name="library_file_unavailable">%1$s (unavailable)</string>
+
+    <!-- Шторка «информация о файле» (шаг 6). -->
+    <string name="media_info_loading">Loading file info…</string>
+    <string name="media_info_unavailable">This file is not available on any host right now</string>
+    <string name="media_info_duration">Duration: %1$s</string>
+    <string name="media_info_resolution">Resolution: %1$d×%2$d</string>
+    <string name="media_info_video_codec">Video codec: %1$s</string>
+    <string name="media_info_audio_codec">Audio codec: %1$s</string>
+    <string name="media_info_host">Host: %1$s</string>
 </resources>

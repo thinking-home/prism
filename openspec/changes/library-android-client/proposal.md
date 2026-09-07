@@ -20,6 +20,18 @@
 - Поиск по библиотеке в это изменение не входит — он будет добавлен отдельным
   изменением позже (в том числе решение, серверный он или клиентский, и как
   пользователь будет им пользоваться).
+- `Prism.Library.Android` переходит с Material Components (Material 2) на
+  Material 3: тема приложения и тема шторки «информация о файле» (см.
+  `library-android/media-actions`) — на `Theme.Material3.*`. Решение
+  пользователя: шторка на Material 2 (`Widget.MaterialComponents.BottomSheet.Modal`)
+  вышла со стандартными для этого стиля прямыми верхними углами вместо
+  скруглённых, живая проверка на эмуляторе это подтвердила; Material 3
+  задаёт скруглённые углы по умолчанию без ручной настройки формы.
+- `Prism.Player.Android` сейчас не использует библиотеку Material Components
+  вовсе (тема наследуется напрямую от `android:style/Theme.Material.NoActionBar`).
+  По решению пользователя он тоже переводится на Material 3 — для
+  единообразия обоих приложений, даже при отсутствии в нём сейчас виджетов
+  Material Components.
 
 ## Capabilities
 
@@ -50,3 +62,11 @@
 - Существующие спецификации `library/tree-and-metadata`,
   `library/catalog-aggregation` и `library/players` не меняются — приложение
   использует их как есть.
+- Переход на Material 3 не меняет поведенческие требования из
+  `specs/library-android/*` (только визуальное оформление, наблюдаемое
+  поведение шторки и действий не описано в спеках как конкретный стиль
+  Material) — новых/изменённых capability не требуется.
+- Затрагивает `Prism.Library.Android/app/build.gradle.kts` и `themes.xml`
+  (замена тем на `Theme.Material3.*`) и добавляет зависимость
+  `com.google.android.material:material` и смену темы в
+  `Prism.Player.Android/app/build.gradle.kts` и его `themes.xml`.

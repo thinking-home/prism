@@ -37,4 +37,13 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // kotlinx.serialization — разбор JSON-ответов в модели данных (Models.kt).
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // Material Components — шторка с информацией о файле (BottomSheetDialogFragment,
+    // решение design.md).
+    implementation("com.google.android.material:material:1.12.0")
+    // FragmentActivity/FragmentManager — нужны, чтобы такую шторку вообще
+    // можно было показать (BottomSheetDialogFragment — обычный Fragment).
+    // Указаны явно, а не оставлены на транзитивную видимость через material:
+    // implementation-зависимости чужих библиотек не попадают на classpath
+    // компиляции нашего кода, только на classpath выполнения.
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
 }

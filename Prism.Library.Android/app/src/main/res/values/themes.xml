@@ -7,4 +7,25 @@
         <item name="android:statusBarColor">@color/bg_dark</item>
         <item name="android:navigationBarColor">@color/bg_dark</item>
     </style>
+
+    <!-- Тема шторки «информация о файле» (BottomSheetDialogFragment, шаг 6).
+         Без явной темы Material Components сама выбирает свою светлую тему
+         по умолчанию (белый фон шторки), а текст внутри остаётся светлым,
+         унаследованным от AppTheme (текст создаётся кодом через
+         requireContext(), а не через тему самой шторки) — светлый текст на
+         белом фоне не читался (замечание пользователя на ревью, design.md).
+         Решение — своя полноценная тема шторки, а не overlay поверх AppTheme:
+         AppTheme сама не тема MaterialComponents, поэтому накладывать поверх
+         неё overlay Material Components небезопасно (риск конфликта
+         атрибутов). Theme.MaterialComponents.BottomSheetDialog — тёмная по
+         умолчанию (в отличие от .Light-варианта); фон самой шторки
+         дополнительно перекрашен в bg_dark, чтобы совпадать с фоном
+         остального приложения. -->
+    <style name="AppBottomSheetDialogTheme" parent="Theme.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/AppBottomSheetStyle</item>
+    </style>
+
+    <style name="AppBottomSheetStyle" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">@color/bg_dark</item>
+    </style>
 </resources>

@@ -42,3 +42,21 @@ data class MediaCard(
     val title: String,
     val present: Boolean = true,
 )
+
+// Подробная карточка файла из GET /api/media/{id} — для шторки «информация»
+// (шаг 6). Поля — подмножество полного ответа хоста (см. Prism.Host,
+// PrismHostApp.MediaDto): только то, что стоит показать пользователю. Числовые
+// поля не обязательны — сервер не гарантирует их для всех форматов, но всегда
+// присылает значение (0 по умолчанию, не null), поэтому default не нужен.
+@Serializable
+data class MediaDetail(
+    val id: String,
+    val title: String,
+    val durationSeconds: Double,
+    val width: Int,
+    val height: Int,
+    val videoCodec: String? = null,
+    val audioCodec: String? = null,
+    val host: String? = null,
+    val playable: Boolean = false,
+)

@@ -8,4 +8,12 @@
     <string name="library_empty">Папка пуста</string>
     <string name="library_root_title">Корень библиотеки</string>
     <string name="library_file_unavailable">%1$s (недоступен)</string>
+
+    <string name="media_info_loading">Загрузка информации о файле…</string>
+    <string name="media_info_unavailable">Файл сейчас недоступен ни на одном хосте</string>
+    <string name="media_info_duration">Длительность: %1$s</string>
+    <string name="media_info_resolution">Разрешение: %1$d×%2$d</string>
+    <string name="media_info_video_codec">Видеокодек: %1$s</string>
+    <string name="media_info_audio_codec">Аудиокодек: %1$s</string>
+    <string name="media_info_host">Хост: %1$s</string>
 </resources>
