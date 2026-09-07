@@ -51,17 +51,30 @@ class LibraryListAdapter(
         // TextView, см. onCreateViewHolder).
         when (val item = items[position]) {
             // Группа (подпапка): клик/центр пульта заходит внутрь неё.
+            // alpha = 1f — на случай, если RecyclerView переиспользует под эту
+            // строку View, до этого показывавший недоступный файл (см. ниже).
             is LibraryListItem.Group -> {
                 holder.text.text = item.node.name
+                holder.text.alpha = 1f
                 holder.text.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_folder, 0, 0, 0)
                 holder.text.setOnClickListener { onGroupClick(item.node) }
             }
-            // Файл; недоступные (present=false) файлы появятся на шаге 5,
-            // действия с файлом (информация, запуск на плеере) — шаги 6–7.
+            // Файл; действия с файлом (информация, запуск на плеере) — шаги 6–7.
+            // Файл, отсутствующий сейчас на всех хостах (present=false), —
+            // подписан пометкой «недоступен» и притушен (alpha), чтобы визуально
+            // отличаться от доступных файлов, как того требует browsing/spec.md,
+            // но не пропадать из списка и не ронять его загрузку.
             is LibraryListItem.File -> {
-                holder.text.text = item.media.title
                 holder.text.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_file, 0, 0, 0)
                 holder.text.setOnClickListener(null)
+                if (item.media.present) {
+                    holder.text.text = item.media.title
+                    holder.text.alpha = 1f
+                } else {
+                    holder.text.text =
+                        holder.text.context.getString(R.string.library_file_unavailable, item.media.title)
+                    holder.text.alpha = 0.5f
+                }
             }
         }
     }

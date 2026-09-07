@@ -7,4 +7,5 @@
     <string name="library_error">Ошибка: %1$s</string>
     <string name="library_empty">Папка пуста</string>
     <string name="library_root_title">Корень библиотеки</string>
+    <string name="library_file_unavailable">%1$s (недоступен)</string>
 </resources>

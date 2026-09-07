@@ -9,4 +9,7 @@
     <string name="library_error">Error: %1$s</string>
     <string name="library_empty">This folder is empty</string>
     <string name="library_root_title">Library root</string>
+    <!-- Показывается вместо обычного названия файла, если он сейчас
+         недоступен ни на одном хосте (present:false). -->
+    <string name="library_file_unavailable">%1$s (unavailable)</string>
 </resources>
