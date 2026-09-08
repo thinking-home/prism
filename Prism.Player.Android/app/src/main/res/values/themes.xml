@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Тёмная плоская тема: без action bar, на весь экран, тёмный фон.
-         Material (не .Light) даёт светлый текст на тёмном по умолчанию. -->
-    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+         Material3.Dark (не DayNight) — фиксированно тёмная, не зависит от
+         системной темы устройства (решение design.md, переход на Material 3;
+         единообразно с Prism.Library.Android). -->
+    <style name="AppTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">@color/bg_dark</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:statusBarColor">@color/bg_dark</item>

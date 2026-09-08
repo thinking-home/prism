@@ -1,31 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Тёмная плоская тема: без action bar, тёмный фон.
-         Material (не .Light) даёт светлый текст на тёмном по умолчанию. -->
-    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+         Material3.Dark (не DayNight) — фиксированно тёмная, не зависит от
+         системной темы устройства (решение design.md, переход на Material 3). -->
+    <style name="AppTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">@color/bg_dark</item>
         <item name="android:statusBarColor">@color/bg_dark</item>
         <item name="android:navigationBarColor">@color/bg_dark</item>
     </style>
 
     <!-- Тема шторки «информация о файле» (BottomSheetDialogFragment, шаг 6).
-         Без явной темы Material Components сама выбирает свою светлую тему
-         по умолчанию (белый фон шторки), а текст внутри остаётся светлым,
-         унаследованным от AppTheme (текст создаётся кодом через
-         requireContext(), а не через тему самой шторки) — светлый текст на
-         белом фоне не читался (замечание пользователя на ревью, design.md).
-         Решение — своя полноценная тема шторки, а не overlay поверх AppTheme:
-         AppTheme сама не тема MaterialComponents, поэтому накладывать поверх
-         неё overlay Material Components небезопасно (риск конфликта
-         атрибутов). Theme.MaterialComponents.BottomSheetDialog — тёмная по
-         умолчанию (в отличие от .Light-варианта); фон самой шторки
-         дополнительно перекрашен в bg_dark, чтобы совпадать с фоном
-         остального приложения. -->
-    <style name="AppBottomSheetDialogTheme" parent="Theme.MaterialComponents.BottomSheetDialog">
+         Без явной темы Material сама выбирает свою светлую тему по умолчанию
+         (белый фон шторки), а текст внутри остаётся светлым, унаследованным
+         от AppTheme (текст создаётся кодом через requireContext(), а не через
+         тему самой шторки) — светлый текст на белом фоне не читался
+         (замечание пользователя на ревью, design.md). Решение — своя
+         полноценная тема шторки, а не overlay поверх AppTheme: AppTheme сама
+         не тема Material Components/Material3, поэтому накладывать поверх
+         неё overlay небезопасно (риск конфликта атрибутов).
+         ThemeOverlay.Material3.BottomSheetDialog — тёмная по умолчанию (в
+         отличие от .Light-варианта); фон самой шторки дополнительно
+         перекрашен в bg_dark, чтобы совпадать с фоном остального приложения
+         (переход с Material Components на Material 3, design.md). -->
+    <style name="AppBottomSheetDialogTheme" parent="ThemeOverlay.Material3.BottomSheetDialog">
         <item name="bottomSheetStyle">@style/AppBottomSheetStyle</item>
     </style>
 
-    <style name="AppBottomSheetStyle" parent="Widget.MaterialComponents.BottomSheet.Modal">
+    <style name="AppBottomSheetStyle" parent="Widget.Material3.BottomSheet.Modal">
         <item name="backgroundTint">@color/bg_dark</item>
     </style>
 </resources>
