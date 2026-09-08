@@ -21,4 +21,20 @@
     <string name="media_info_video_codec">Video codec: %1$s</string>
     <string name="media_info_audio_codec">Audio codec: %1$s</string>
     <string name="media_info_host">Host: %1$s</string>
+
+    <!-- Шторка выбора действия с файлом (шаг 7). -->
+    <string name="file_action_info">File info</string>
+    <string name="file_action_play">Play on a player</string>
+
+    <!-- Шторка «включить на плеере» (шаг 7). -->
+    <string name="players_loading">Loading player list…</string>
+    <string name="players_empty">No players found</string>
+    <string name="players_unavailable">Player playback is unavailable: MQTT is not configured</string>
+    <string name="players_sending">Sending command…</string>
+    <string name="players_open_success">Playback command sent</string>
+    <string name="players_open_not_playable">This file cannot be played</string>
+    <string name="players_open_not_found">Player or file not found</string>
+    <string name="players_open_broker_unavailable">MQTT broker is unavailable</string>
+    <!-- Показывается вместо обычного имени плеера, если он сейчас не в сети. -->
+    <string name="player_offline">%1$s (offline)</string>
 </resources>

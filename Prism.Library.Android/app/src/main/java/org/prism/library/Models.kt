@@ -35,12 +35,18 @@ data class LibraryTree(
 
 // Карточка файла из GET /api/media. present по умолчанию true: этот список
 // содержит только файлы, реально найденные на каком-то хосте сейчас — сам
-// эндпоинт отсутствующие файлы не возвращает.
+// эндпоинт отсутствующие файлы не возвращает. playable по умолчанию false —
+// безопасное значение для заглушки недоступного файла (MainActivity строит её
+// вручную, без реального ответа сервера, см. renderFolder): такой файл нельзя
+// запустить на плеере, пока не выяснится, что он снова доступен (шаг 7,
+// media-actions/spec.md, «Ограничение действия «включить на плеере»
+// неиграбельными файлами»).
 @Serializable
 data class MediaCard(
     val id: String,
     val title: String,
     val present: Boolean = true,
+    val playable: Boolean = false,
 )
 
 // Подробная карточка файла из GET /api/media/{id} — для шторки «информация»
@@ -60,3 +66,18 @@ data class MediaDetail(
     val host: String? = null,
     val playable: Boolean = false,
 )
+
+// Плеер, известный библиотеке через MQTT (GET /api/players, шаг 7). Сервер
+// присылает больше полей (адрес потока, позиция воспроизведения и т.п.) —
+// нам для списка выбора плеера нужны только эти три.
+@Serializable
+data class Player(
+    val id: String,
+    val name: String,
+    val online: Boolean = false,
+)
+
+// Тело запроса POST /api/players/{id}/open — id файла из каталога библиотеки
+// (см. Prism.Library.PlayerEndpoints.OpenInput на сервере).
+@Serializable
+data class OpenRequest(val mediaId: String)

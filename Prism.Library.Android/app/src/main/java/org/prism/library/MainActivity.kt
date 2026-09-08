@@ -291,17 +291,17 @@ class MainActivity : FragmentActivity() {
         } else {
             statusText.visibility = View.GONE
             list.visibility = View.VISIBLE
-            list.adapter = LibraryListAdapter(items, ::openGroup, ::showFileInfo)
+            list.adapter = LibraryListAdapter(items, ::openGroup, ::showFileActions)
         }
     }
 
-    // Действие «информация» у файла (шаг 6): открывает шторку снизу с
-    // карточкой файла поверх текущего списка папки, который остаётся открытым
-    // под ней (media-actions/spec.md, «Открытие шторки с информацией»).
-    // Показывается и для недоступных файлов — тогда шторка сама покажет
-    // сообщение о недоступности (см. MediaInfoBottomSheet).
-    private fun showFileInfo(media: MediaCard) {
-        MediaInfoBottomSheet.show(supportFragmentManager, libraryUrl, media.id)
+    // Выбор файла в списке (шаг 7): открывает шторку выбора действия
+    // («информация» или «включить на плеере») поверх текущего списка папки,
+    // который остаётся открытым под ней. Показывается и для недоступных
+    // файлов — шторка сама решает, какие действия предложить (см.
+    // FileActionsBottomSheet и media-actions/spec.md).
+    private fun showFileActions(media: MediaCard) {
+        FileActionsBottomSheet.show(supportFragmentManager, libraryUrl, media)
     }
 
     // Показывает текстовое сообщение (загрузка/ошибка/пусто) вместо списка.

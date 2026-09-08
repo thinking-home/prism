@@ -4,11 +4,14 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import java.io.IOException
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 // Код ответа неуспешного HTTP-запроса — отдельный тип исключения вместо
@@ -50,6 +53,63 @@ object LibraryApi {
         // пути URL (например, пробелы), в отличие от путей getTree/getMedia,
         // которые фиксированы и такой проблемы не имеют.
         get(baseUrl, "/api/media/${Uri.encode(id)}", onResult) { json.decodeFromString(it) }
+    }
+
+    // GET /api/players — плееры, известные библиотеке через MQTT (шаг 7).
+    // 503 — MQTT-брокер не настроен в библиотеке: вызывающий код (шторка
+    // выбора плеера) различает эту причину по HttpStatusException.code и
+    // показывает отдельное сообщение вместо списка (media-actions/spec.md,
+    // «MQTT не настроен в библиотеке»).
+    fun getPlayers(baseUrl: String, onResult: (Result<List<Player>>) -> Unit) {
+        get(baseUrl, "/api/players", onResult) { json.decodeFromString(it) }
+    }
+
+    // POST /api/players/{id}/open — команда «включить этот файл на этом
+    // плеере» (шаг 7). Успешный ответ сервера — 202 без тела (Results.Accepted());
+    // тело нам не нужно, важен только факт успеха. Ошибочные коды (400 —
+    // файл не воспроизводим, 404 — плеер или файл не найден, 503 — MQTT
+    // недоступен) вызывающий код различает по HttpStatusException.code, как и
+    // у getMediaDetail.
+    fun openOnPlayer(
+        baseUrl: String,
+        playerId: String,
+        mediaId: String,
+        onResult: (Result<Unit>) -> Unit,
+    ) {
+        val mainThread = Handler(Looper.getMainLooper())
+
+        val body = json.encodeToString(OpenRequest(mediaId))
+            .toRequestBody("application/json".toMediaType())
+
+        // См. комментарий в get() ниже: baseUrl — текст из настроек, может
+        // оказаться некорректным URL, url() бросает исключение синхронно.
+        val request = try {
+            Request.Builder()
+                .url(baseUrl.trimEnd('/') + "/api/players/${Uri.encode(playerId)}/open")
+                .post(body)
+                .build()
+        } catch (e: IllegalArgumentException) {
+            mainThread.post { onResult(Result.failure(e)) }
+            return
+        }
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainThread.post { onResult(Result.failure(e)) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val result = try {
+                    response.use {
+                        if (!it.isSuccessful) throw HttpStatusException(it.code)
+                        Result.success(Unit)
+                    }
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+                mainThread.post { onResult(result) }
+            }
+        })
     }
 
     // Общая часть обоих запросов: выполнить GET, разобрать тело парсером,

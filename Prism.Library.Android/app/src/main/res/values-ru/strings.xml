@@ -16,4 +16,17 @@
     <string name="media_info_video_codec">Видеокодек: %1$s</string>
     <string name="media_info_audio_codec">Аудиокодек: %1$s</string>
     <string name="media_info_host">Хост: %1$s</string>
+
+    <string name="file_action_info">Информация о файле</string>
+    <string name="file_action_play">Включить на плеере</string>
+
+    <string name="players_loading">Загрузка списка плееров…</string>
+    <string name="players_empty">Плееры не найдены</string>
+    <string name="players_unavailable">Запуск на плеере недоступен: MQTT не настроен</string>
+    <string name="players_sending">Отправка команды…</string>
+    <string name="players_open_success">Команда воспроизведения отправлена</string>
+    <string name="players_open_not_playable">Этот файл нельзя воспроизвести</string>
+    <string name="players_open_not_found">Плеер или файл не найден</string>
+    <string name="players_open_broker_unavailable">MQTT-брокер недоступен</string>
+    <string name="player_offline">%1$s (не в сети)</string>
 </resources>
