@@ -8,6 +8,8 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.FragmentManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 
 // Шторка выбора действия с файлом (шаг 7): открывается вместо прежнего
@@ -40,6 +42,17 @@ class FileActionsBottomSheet : BottomSheetDialogFragment() {
 
     // Та же тёмная тема, что и у шторки «информация» (design.md, шаг 6/9).
     override fun getTheme(): Int = R.style.AppBottomSheetDialogTheme
+
+    // Принудительно раскрываем шторку целиком вместо частично свёрнутого
+    // состояния по умолчанию (design.md, замечание пользователя на живой
+    // проверке шага 8 на приставке Z12 Pro): на низком ландшафтном экране
+    // приставки высоты по умолчанию (peekHeight) не хватает даже на две
+    // короткие строки действий, и вторая строка оказывается ниже края
+    // экрана.
+    override fun onStart() {
+        super.onStart()
+        (dialog as? BottomSheetDialog)?.behavior?.state = BottomSheetBehavior.STATE_EXPANDED
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,

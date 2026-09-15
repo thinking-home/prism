@@ -9,6 +9,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.FragmentManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 
 // Шторка «включить на плеере» (шаг 7): список плееров, известных библиотеке
@@ -34,6 +36,14 @@ class PlayerListBottomSheet : BottomSheetDialogFragment() {
     }
 
     override fun getTheme(): Int = R.style.AppBottomSheetDialogTheme
+
+    // Принудительно раскрываем шторку целиком (см. FileActionsBottomSheet —
+    // та же причина: на приставке частично свёрнутого состояния по умолчанию
+    // не хватает, чтобы показать содержимое целиком).
+    override fun onStart() {
+        super.onStart()
+        (dialog as? BottomSheetDialog)?.behavior?.state = BottomSheetBehavior.STATE_EXPANDED
+    }
 
     // Текст состояния (загрузка/ошибка/пусто/отправка команды) — заменяется
     // списком плееров при успешной загрузке.

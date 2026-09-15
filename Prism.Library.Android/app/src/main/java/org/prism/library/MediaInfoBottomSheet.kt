@@ -7,6 +7,8 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.FragmentManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 
 // Шторка «информация о файле» (шаг 6): выезжает снизу поверх текущего списка
@@ -40,6 +42,14 @@ class MediaInfoBottomSheet : BottomSheetDialogFragment() {
     // неё фон шторки был белым, а текст (унаследованный от тёмной AppTheme)
     // светлым — нечитаемая комбинация.
     override fun getTheme(): Int = R.style.AppBottomSheetDialogTheme
+
+    // Принудительно раскрываем шторку целиком (см. FileActionsBottomSheet —
+    // та же причина: на приставке частично свёрнутого состояния по умолчанию
+    // не хватает, чтобы показать содержимое целиком).
+    override fun onStart() {
+        super.onStart()
+        (dialog as? BottomSheetDialog)?.behavior?.state = BottomSheetBehavior.STATE_EXPANDED
+    }
 
     // Текст состояния (загрузка/ошибка/недоступен) — заменяется карточкой при
     // успешной загрузке.
