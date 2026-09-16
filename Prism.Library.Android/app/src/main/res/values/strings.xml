@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Строки по умолчанию (английский). Русские — в values-ru/strings.xml.
+     Язык выбирается автоматически по языку системы. -->
+<resources>
+    <string name="settings_library_url">Prism library address</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_url_required">Enter the library address</string>
+    <string name="library_loading">Loading library…</string>
+    <string name="library_error">Error: %1$s</string>
+    <string name="library_empty">This folder is empty</string>
+    <string name="library_root_title">Library root</string>
+    <!-- Показывается вместо обычного названия файла, если он сейчас
+         недоступен ни на одном хосте (present:false). -->
+    <string name="library_file_unavailable">%1$s (unavailable)</string>
+
+    <!-- Шторка «информация о файле» (шаг 6). -->
+    <string name="media_info_loading">Loading file info…</string>
+    <string name="media_info_unavailable">This file is not available on any host right now</string>
+    <string name="media_info_duration">Duration: %1$s</string>
+    <string name="media_info_resolution">Resolution: %1$d×%2$d</string>
+    <string name="media_info_video_codec">Video codec: %1$s</string>
+    <string name="media_info_audio_codec">Audio codec: %1$s</string>
+    <string name="media_info_host">Host: %1$s</string>
+
+    <!-- Шторка выбора действия с файлом (шаг 7). -->
+    <string name="file_action_info">File info</string>
+    <string name="file_action_play">Play on a player</string>
+
+    <!-- Шторка «включить на плеере» (шаг 7). -->
+    <string name="players_loading">Loading player list…</string>
+    <string name="players_empty">No players found</string>
+    <string name="players_unavailable">Player playback is unavailable: MQTT is not configured</string>
+    <string name="players_sending">Sending command…</string>
+    <string name="players_open_success">Playback command sent</string>
+    <string name="players_open_not_playable">This file cannot be played</string>
+    <string name="players_open_not_found">Player or file not found</string>
+    <string name="players_open_broker_unavailable">MQTT broker is unavailable</string>
+    <!-- Показывается вместо обычного имени плеера, если он сейчас не в сети. -->
+    <string name="player_offline">%1$s (offline)</string>
+</resources>

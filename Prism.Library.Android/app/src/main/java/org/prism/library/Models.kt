@@ -1,0 +1,83 @@
+package org.prism.library
+
+import kotlinx.serialization.Serializable
+
+// Модели данных библиотеки — только поля, которые нужны для списка папки на
+// этом шаге. Остальные поля ответа (например, длительность видео или мета)
+// пока не нужны и в модели не описаны — kotlinx.serialization их просто
+// проигнорирует при разборе.
+
+// Одна группа дерева библиотеки: id, id родителя (null — группа верхнего
+// уровня) и отображаемое имя.
+@Serializable
+data class LibraryNode(
+    val id: String,
+    val parentId: String? = null,
+    val name: String,
+)
+
+// Членство одного файла в одной группе. present — файл сейчас доступен хотя
+// бы на одном хосте; используется, когда мы показываем содержимое группы
+// (шаги 4–5), а не корень.
+@Serializable
+data class LibraryItem(
+    val nodeId: String,
+    val mediaId: String,
+    val present: Boolean,
+)
+
+// Ответ GET /api/library/tree целиком: все группы и всё членство одним запросом.
+@Serializable
+data class LibraryTree(
+    val nodes: List<LibraryNode>,
+    val items: List<LibraryItem>,
+)
+
+// Карточка файла из GET /api/media. present по умолчанию true: этот список
+// содержит только файлы, реально найденные на каком-то хосте сейчас — сам
+// эндпоинт отсутствующие файлы не возвращает. playable по умолчанию false —
+// безопасное значение для заглушки недоступного файла (MainActivity строит её
+// вручную, без реального ответа сервера, см. renderFolder): такой файл нельзя
+// запустить на плеере, пока не выяснится, что он снова доступен (шаг 7,
+// media-actions/spec.md, «Ограничение действия «включить на плеере»
+// неиграбельными файлами»).
+@Serializable
+data class MediaCard(
+    val id: String,
+    val title: String,
+    val present: Boolean = true,
+    val playable: Boolean = false,
+)
+
+// Подробная карточка файла из GET /api/media/{id} — для шторки «информация»
+// (шаг 6). Поля — подмножество полного ответа хоста (см. Prism.Host,
+// PrismHostApp.MediaDto): только то, что стоит показать пользователю. Числовые
+// поля не обязательны — сервер не гарантирует их для всех форматов, но всегда
+// присылает значение (0 по умолчанию, не null), поэтому default не нужен.
+@Serializable
+data class MediaDetail(
+    val id: String,
+    val title: String,
+    val durationSeconds: Double,
+    val width: Int,
+    val height: Int,
+    val videoCodec: String? = null,
+    val audioCodec: String? = null,
+    val host: String? = null,
+    val playable: Boolean = false,
+)
+
+// Плеер, известный библиотеке через MQTT (GET /api/players, шаг 7). Сервер
+// присылает больше полей (адрес потока, позиция воспроизведения и т.п.) —
+// нам для списка выбора плеера нужны только эти три.
+@Serializable
+data class Player(
+    val id: String,
+    val name: String,
+    val online: Boolean = false,
+)
+
+// Тело запроса POST /api/players/{id}/open — id файла из каталога библиотеки
+// (см. Prism.Library.PlayerEndpoints.OpenInput на сервере).
+@Serializable
+data class OpenRequest(val mediaId: String)

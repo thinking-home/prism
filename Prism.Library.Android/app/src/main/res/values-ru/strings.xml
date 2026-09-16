@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_library_url">Адрес библиотеки Prism</string>
+    <string name="settings_save">Сохранить</string>
+    <string name="settings_url_required">Введите адрес библиотеки</string>
+    <string name="library_loading">Загрузка библиотеки…</string>
+    <string name="library_error">Ошибка: %1$s</string>
+    <string name="library_empty">Папка пуста</string>
+    <string name="library_root_title">Корень библиотеки</string>
+    <string name="library_file_unavailable">%1$s (недоступен)</string>
+
+    <string name="media_info_loading">Загрузка информации о файле…</string>
+    <string name="media_info_unavailable">Файл сейчас недоступен ни на одном хосте</string>
+    <string name="media_info_duration">Длительность: %1$s</string>
+    <string name="media_info_resolution">Разрешение: %1$d×%2$d</string>
+    <string name="media_info_video_codec">Видеокодек: %1$s</string>
+    <string name="media_info_audio_codec">Аудиокодек: %1$s</string>
+    <string name="media_info_host">Хост: %1$s</string>
+
+    <string name="file_action_info">Информация о файле</string>
+    <string name="file_action_play">Включить на плеере</string>
+
+    <string name="players_loading">Загрузка списка плееров…</string>
+    <string name="players_empty">Плееры не найдены</string>
+    <string name="players_unavailable">Запуск на плеере недоступен: MQTT не настроен</string>
+    <string name="players_sending">Отправка команды…</string>
+    <string name="players_open_success">Команда воспроизведения отправлена</string>
+    <string name="players_open_not_playable">Этот файл нельзя воспроизвести</string>
+    <string name="players_open_not_found">Плеер или файл не найден</string>
+    <string name="players_open_broker_unavailable">MQTT-брокер недоступен</string>
+    <string name="player_offline">%1$s (не в сети)</string>
+</resources>

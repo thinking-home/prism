@@ -75,4 +75,8 @@ dependencies {
     implementation("androidx.media3:media3-session:1.4.1")
     // MQTT-клиент (Paho) — приём команд управления.
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+    // Material Components — тема приложения Theme.Material3.* требует эту
+    // библиотеку (переход на Material 3, design.md); собственных
+    // Material-виджетов в этом приложении нет.
+    implementation("com.google.android.material:material:1.12.0")
 }
