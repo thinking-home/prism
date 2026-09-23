@@ -6,8 +6,8 @@ hero:
   text: Видеотека в каждой комнате
   tagline: Включайте видео с компьютеров и NAS в домашней сети на телевизорах в любой комнате.
   image:
-    src: /images/prism-hero-v5.png
-    alt: Компьютер и NAS соединены через Prism с телевизорами в домашней сети
+    src: /images/prism-logo.svg
+    alt: Логотип Prism — гранёная буква P с символом воспроизведения
   actions:
     - theme: brand
       text: Быстрый старт
