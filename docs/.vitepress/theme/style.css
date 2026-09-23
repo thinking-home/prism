@@ -1,0 +1,20 @@
+.VPFeature .box > .VPImage {
+  padding: 12px;
+  border-radius: 16px;
+  background: #5155bb;
+}
+
+.tv-note {
+  flex-basis: 100%;
+  max-width: 460px;
+  margin: 18px 8px 0;
+  color: var(--vp-c-text-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@media (max-width: 959px) {
+  .tv-note {
+    margin-inline: auto;
+  }
+}
