@@ -10,8 +10,8 @@ hero:
     alt: Логотип Prism — гранёная буква P с символом воспроизведения
   actions:
     - theme: brand
-      text: Быстрый старт
-      link: /guide/quick-start
+      text: Установка компонентов
+      link: /components/
     - theme: alt
       text: Как устроен Prism
       link: /guide/what-is-prism

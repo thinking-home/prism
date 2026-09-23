@@ -17,6 +17,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: "Руководство", link: "/guide/what-is-prism" },
+      { text: "Компоненты", link: "/components/" },
       { text: "API", link: "/api/http" },
       { text: "GitHub", link: "https://github.com/thinking-home/prism" },
     ],
@@ -26,14 +27,25 @@ export default defineConfig({
       {
         text: "Руководство",
         items: [
-          { text: "Что такое Prism", link: "/guide/what-is-prism" },
-          { text: "Быстрый старт", link: "/guide/quick-start" },
+          { text: "Как устроен Prism", link: "/guide/what-is-prism" },
+        ],
+      },
+      {
+        text: "Компоненты",
+        link: "/components/",
+        items: [
+          { text: "Хост", link: "/components/host" },
+          { text: "Плеер для Android TV", link: "/components/player-android" },
+          { text: "Библиотека", link: "/components/library" },
+          { text: "Android-клиент библиотеки", link: "/components/library-android" },
+          { text: "Launcher для Windows", link: "/components/launcher" },
         ],
       },
       {
         text: "API",
         items: [
           { text: "HTTP API хоста", link: "/api/http" },
+          { text: "HTTP API библиотеки", link: "/api/library" },
           { text: "MQTT-контракт плеера", link: "/api/mqtt" },
         ],
       },
