@@ -47,6 +47,9 @@
         <EmbeddedResource Include="app.ico">
             <LogicalName>app.ico</LogicalName>
         </EmbeddedResource>
+        <EmbeddedResource Include="app-offline.ico">
+            <LogicalName>app-offline.ico</LogicalName>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>

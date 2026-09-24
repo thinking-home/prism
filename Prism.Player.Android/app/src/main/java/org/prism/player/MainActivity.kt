@@ -44,7 +44,7 @@ class MainActivity : Activity() {
 
         val root = FrameLayout(this)
 
-        // Центр: логотип с названием.
+        // Центр: логотип без текста.
         val logo = ImageView(this).apply {
             setImageResource(R.drawable.main_screen)
             layoutParams = FrameLayout.LayoutParams(

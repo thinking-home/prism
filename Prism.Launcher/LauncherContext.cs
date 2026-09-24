@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Prism.Mqtt;
 
@@ -33,8 +31,8 @@ public sealed class LauncherContext : ApplicationContext
         _marshal.CreateControl(); // хэндл для маршалинга в UI-поток (BeginInvoke)
         _options = LauncherOptions.Load();
 
-        _iconNormal = LoadTrayIcon();
-        _iconOffline = MakeOfflineIcon(_iconNormal);
+        _iconNormal = LoadTrayIcon("app.ico");
+        _iconOffline = LoadTrayIcon("app-offline.ico");
 
         _tray = new NotifyIcon
         {
@@ -61,7 +59,7 @@ public sealed class LauncherContext : ApplicationContext
     /// <summary>
     /// Приводит значок и подсказку в соответствие с состоянием подключения к
     /// брокеру: без него ни один плеер не виден и «Отправить» работать не будет,
-    /// поэтому на значке появляется красный крестик.
+    /// поэтому значок приглушается и получает янтарную пометку с минусом.
     /// </summary>
     private void ApplyBrokerState()
     {
@@ -196,77 +194,27 @@ public sealed class LauncherContext : ApplicationContext
     private void Notify(string title, string text, ToolTipIcon icon) =>
         Post(() => _tray.ShowBalloonTip(4000, title, text, icon));
 
-    /// <summary>Значок трея из встроенного app.ico (иначе — системный).</summary>
-    private static Icon LoadTrayIcon()
+    /// <summary>Готовый значок нужного размера из встроенного ICO (иначе — копия системного).</summary>
+    private static Icon LoadTrayIcon(string resourceName)
     {
         try
         {
-            using var stream = typeof(LauncherContext).Assembly.GetManifestResourceStream("app.ico");
+            using var stream = typeof(LauncherContext).Assembly.GetManifestResourceStream(resourceName);
             if (stream is not null)
                 return new Icon(stream, SystemInformation.SmallIconSize);
         }
         catch { /* не смогли — системный значок */ }
-        return SystemIcons.Application;
+        return (Icon)SystemIcons.Application.Clone();
     }
-
-    /// <summary>
-    /// Тот же значок с красным крестиком в правом нижнем углу — как системные
-    /// оверлеи Windows: заливка кружка + белая обводка, чтобы пометка читалась
-    /// и на светлом, и на тёмном значке при 16 px.
-    /// </summary>
-    private static Icon MakeOfflineIcon(Icon source)
-    {
-        var size = source.Size;
-        using var bitmap = new Bitmap(size.Width, size.Height);
-
-        using (var g = Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.DrawIcon(source, new Rectangle(0, 0, size.Width, size.Height));
-
-            var side = Math.Max(9f, size.Width * 0.6f);
-            var badge = new RectangleF(size.Width - side, size.Height - side, side - 1, side - 1);
-
-            using (var fill = new SolidBrush(Color.FromArgb(210, 40, 40)))
-            using (var outline = new Pen(Color.White, Math.Max(1f, side / 9f)))
-            {
-                g.FillEllipse(fill, badge);
-                g.DrawEllipse(outline, badge);
-            }
-
-            var pad = side / 3.9f;
-            using var cross = new Pen(Color.White, Math.Max(1.4f, side / 6f))
-            {
-                StartCap = LineCap.Round,
-                EndCap = LineCap.Round,
-            };
-            g.DrawLine(cross, badge.Left + pad, badge.Top + pad, badge.Right - pad, badge.Bottom - pad);
-            g.DrawLine(cross, badge.Right - pad, badge.Top + pad, badge.Left + pad, badge.Bottom - pad);
-        }
-
-        // Icon.FromHandle не владеет хэндлом: копируем значок и освобождаем HICON сами.
-        var handle = bitmap.GetHicon();
-        try
-        {
-            using var temporary = Icon.FromHandle(handle);
-            return (Icon)temporary.Clone();
-        }
-        finally
-        {
-            DestroyIcon(handle);
-        }
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DestroyIcon(IntPtr handle);
 
     private void Exit()
     {
         _brokerWatch.Stop();
         _tray.Visible = false;
         _mqtt.Dispose();
-        _iconOffline.Dispose(); // наш собственный значок; _iconNormal может быть системным
+        _tray.Dispose();
+        _iconOffline.Dispose();
+        _iconNormal.Dispose();
         ExitThread();
     }
 }

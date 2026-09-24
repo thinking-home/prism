@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <title>Prism Launcher — MQTT connected, small size</title>
+  <path fill="#4C63F2" d="M0 0H16V16H0Z"/>
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M4 3.5 8 1.5 12 3.5V8L8 10V12.5L4 14.5ZM6 5V8L9.5 6.5Z"/>
+</svg>

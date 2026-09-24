@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 432 554" fill="none">
+  <title>Prism</title>
+  <defs>
+    <clipPath id="prism-shape">
+      <path clip-rule="evenodd" d="M80 120 216 42 352 120V276L216 354V434L80 512V120ZM173 166V260L256 213 173 166Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#prism-shape)">
+    <path fill="#593A88" d="M80 42H352V512H80Z"/>
+    <path fill="#9560D9" d="M80 120 216 42V198L80 276Z"/>
+    <path fill="#DFB8FA" d="m216 42 136 78-136 78Z"/>
+    <path fill="#B180E9" d="m352 120-136 78 136 78Z"/>
+    <path fill="#794BC1" d="m216 198 136 78-136 78Z"/>
+    <path fill="#8954CE" d="m80 276 136-78v156Z"/>
+  </g>
+</svg>

@@ -14,7 +14,7 @@
          строк расширений. -->
     <Package Name="Prism Host"
              Manufacturer="Prism"
-             Version="0.3.0"
+             Version="0.3.1"
              UpgradeCode="8360D512-7A9E-4DA9-8645-BD7E5D061883"
              Scope="perMachine">
 
