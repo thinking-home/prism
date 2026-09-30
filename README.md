@@ -483,6 +483,45 @@ msiexec /i PrismHostSetup.msi /qn /l*v install.log
 > FireGiant. Без него VS просто покажет проект как невыгруженный — сборке из
 > CLI это не мешает. JetBrains Rider открывает `.wixproj` без расширений.
 
+### Инсталлятор сервера библиотеки
+
+`Prism.Library.Service` запускает библиотеку как службу Windows, а
+`Prism.Library.Setup` собирает отдельный MSI **Prism Library**. В решение
+добавлены оба проекта; MSI, как и инсталлятор хоста, собирается только в Release:
+
+```bash
+dotnet build Prism.Library.Setup/Prism.Library.Setup.wixproj -c Release
+# → Prism.Library.Setup/bin/Release/en-US/PrismLibrarySetup.msi
+```
+
+Для сборки нужны .NET SDK 10 и Node.js/npm: инсталлятор сам выполняет `npm ci`
+и `npm run build` в `Prism.Client`, публикует службу и пакует веб-клиент в
+`wwwroot/`. На целевой машине нужен **ASP.NET Core Runtime 10 x64**; Node.js
+для работы установленной библиотеки не нужен. SQLite включён в exe вместе
+с native-библиотекой; FFmpeg и лаунчер в этот пакет не входят.
+
+Пакет устанавливается в `C:\Program Files\Prism Library`, создаёт службу
+**PrismLibrary** (отображаемое имя **Prism Library**, LocalSystem, автоматический
+запуск) и правило брандмауэра для локальной подсети. Служба запускается сразу
+после установки. По умолчанию API и веб-клиент доступны на порту **8081**.
+
+Настройки — в `appsettings.json` рядом с exe: `Hosts` задаёт адреса хостов
+(по умолчанию `http://localhost:8080`), `Mqtt` — брокер для управления плеерами
+(по умолчанию не настроен). После изменения настроек перезапустите службу:
+
+```bat
+sc stop PrismLibrary && sc start PrismLibrary
+```
+
+Обновление и восстановление MSI сохраняют существующий `appsettings.json`.
+При удалении пакета служба, правило брандмауэра и программные файлы удаляются,
+а конфигурация, БД в `data/` и логи в `logs/` остаются. При повторной установке
+используется сохранённая конфигурация. Бесшумная установка из консоли администратора:
+
+```bat
+msiexec /i PrismLibrarySetup.msi /qn /l*v library-install.log
+```
+
 ## MQTT-брокер
 
 Android-плеер ([Prism.Player.Android](Prism.Player.Android/README.md)) управляется

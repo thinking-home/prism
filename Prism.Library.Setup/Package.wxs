@@ -1,0 +1,39 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+    <Package Name="Prism Library" Manufacturer="Prism" Version="0.1.0"
+             UpgradeCode="A86F3841-D67E-496A-9BF2-2A92A226435F" Scope="perMachine">
+        <MajorUpgrade DowngradeErrorMessage="A newer version of Prism Library is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+        <ui:WixUI Id="WixUI_Minimal" />
+        <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+        <StandardDirectory Id="ProgramFiles64Folder">
+            <Directory Id="INSTALLFOLDER" Name="Prism Library">
+                <Component Id="LibraryService">
+                    <File Id="PrismLibraryExe" Source="!(bindpath.Prism.Library.Service)\Prism.Library.Service.exe" KeyPath="yes">
+                        <fw:FirewallException Id="PrismLibraryLan" Name="Prism Library"
+                            Description="Prism Library - media catalog and web interface."
+                            Scope="localSubnet" Profile="all" />
+                    </File>
+                    <ServiceInstall Id="PrismLibraryService" Name="PrismLibrary"
+                        DisplayName="Prism Library"
+                        Description="Prism library server: media catalog, web interface and player control."
+                        Type="ownProcess" Start="auto" Account="LocalSystem" ErrorControl="normal" />
+                    <ServiceControl Id="PrismLibraryControl" Name="PrismLibrary"
+                        Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+                </Component>
+
+                <!-- Пользовательские Hosts/Mqtt/правила не перезаписываются при
+                     repair/upgrade и сохраняются при удалении приложения.
+                     Генерируемые data/ и logs/ MSI не трогает. -->
+                <Component Id="LibrarySettings" Permanent="yes" NeverOverwrite="yes">
+                    <File Id="LibraryAppSettings" Source="!(bindpath.Prism.Library.Service)\appsettings.json" KeyPath="yes" />
+                </Component>
+                <Directory Id="WebRoot" Name="wwwroot">
+                    <Files Include="$(ClientDist)\**" />
+                </Directory>
+            </Directory>
+        </StandardDirectory>
+    </Package>
+</Wix>

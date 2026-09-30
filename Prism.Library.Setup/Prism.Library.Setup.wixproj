@@ -1,0 +1,23 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+    <PropertyGroup>
+        <InstallerPlatform>x64</InstallerPlatform>
+        <OutputName>PrismLibrarySetup</OutputName>
+        <ClientDir>$(MSBuildThisFileDirectory)..\Prism.Client</ClientDir>
+        <DefineConstants>ClientDist=$(ClientDir)\dist</DefineConstants>
+    </PropertyGroup>
+
+    <!-- MSI всегда содержит актуальную production-сборку веб-клиента.
+         npm ci использует зафиксированный lock-файл; требуется Node.js/npm. -->
+    <Target Name="BuildWebClient" BeforeTargets="BeforeBuild">
+        <Exec WorkingDirectory="$(ClientDir)" Command="npm ci --no-audit --no-fund" />
+        <Exec WorkingDirectory="$(ClientDir)" Command="npm run build" />
+        <Error Condition="!Exists('$(ClientDir)\dist\index.html')"
+               Text="Web client build did not produce dist/index.html." />
+    </Target>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Prism.Library.Service\Prism.Library.Service.csproj" Publish="true" />
+        <PackageReference Include="WixToolset.Firewall.wixext" Version="6.0.2" />
+        <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
+    </ItemGroup>
+</Project>

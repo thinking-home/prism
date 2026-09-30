@@ -2,7 +2,7 @@
 
     <!-- Библиотека Prism (сервис): дерево групп, мета, правила автозаполнения,
          агрегация хостов. Запускаемые обёртки — Prism.Library.Console (unix и
-         разработка) и Prism.Library.Service (служба Windows, позже). -->
+         разработка) и Prism.Library.Service (служба Windows). -->
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
