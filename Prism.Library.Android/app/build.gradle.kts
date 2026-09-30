@@ -1,8 +1,15 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 // Build-файл модуля приложения.
 plugins {
     id("com.android.application")       // это Android-приложение
-    id("org.jetbrains.kotlin.android")  // на языке Kotlin
     id("org.jetbrains.kotlin.plugin.serialization") // разбор JSON-ответов библиотеки
+}
+
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) load(FileInputStream(keystorePropsFile))
 }
 
 android {
@@ -19,13 +26,29 @@ android {
         versionName = "0.1"
     }
 
-    // Компилируем Java/Kotlin под уровень языка 17 (JDK 21 это умеет).
+    signingConfigs {
+        create("release") {
+            if (keystorePropsFile.exists()) {
+                storeFile = rootProject.file(keystoreProps["storeFile"] as String)
+                storePassword = keystoreProps["storePassword"] as String
+                keyAlias = keystoreProps["keyAlias"] as String
+                keyPassword = keystoreProps["keyPassword"] as String
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
+    // Сборка работает на JDK 25, байткод Java/Kotlin остаётся совместимым с Java 17.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = "17"
     }
 }
 

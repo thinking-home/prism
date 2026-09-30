@@ -4,7 +4,6 @@ import java.util.Properties
 // Build-файл модуля приложения.
 plugins {
     id("com.android.application")       // это Android-приложение
-    id("org.jetbrains.kotlin.android")  // на языке Kotlin
 }
 
 // Данные для подписи release читаем из keystore.properties (файл и ключ — не в git).
@@ -49,17 +48,17 @@ android {
         release {
             // В release BuildConfig.DEBUG=false → id плеера = UUID, поля настроек пустые.
             isMinifyEnabled = false // без обфускации (Paho/Media3 используют рефлексию)
-            signingConfig = signingConfigs.getByName("release")
+            // Без локального ключа можно проверить сборку и получить unsigned APK.
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
-    // Компилируем Java/Kotlin под уровень языка 17 (JDK 21 это умеет).
+    // Сборка работает на JDK 25, байткод Java/Kotlin остаётся совместимым с Java 17.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = "17"
     }
 }
 

@@ -173,7 +173,12 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 
 ## Сборка
 
-Требуется Android Studio / Android SDK (JDK, `adb`, Gradle). Сборка из терминала:
+Требуется Android Studio / Android SDK (платформа 36, Build Tools 36.0.0 и `adb`).
+Оба Android-проекта собираются на **JDK 25**: Gradle Wrapper 9.1.0,
+Android Gradle Plugin 9.0.1 и встроенный Kotlin 2.3.0. `JAVA_HOME` должен
+указывать на JDK 25 (например, `jbr` в установленной Android Studio),
+`ANDROID_HOME` — на Android SDK. Уровень байткода остаётся Java 17;
+минимальная версия Android не меняется. Сборка из терминала:
 
 ```bash
 ./gradlew assembleDebug        # debug-APK (для тестов; id=emulator, дефолты 10.0.2.2)
@@ -190,7 +195,14 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 ```
 
 Подпись release настроена через `keystore.properties` (в корне Android-проекта, НЕ в
-git) и keystore `prism-release.jks`. **Храни `prism-release.jks` в надёжном месте:** без
+git) и keystore `prism-release.jks`. Если файла настроек подписи нет, сборка создаёт
+`app-release-unsigned.apk`: перед установкой его нужно подписать прежним ключом.
+Библиотека Android читает такой же `keystore.properties` из корня своего проекта.
+Оба приложения могут использовать один постоянный ключ: путь `storeFile` задаётся
+относительно корня соответствующего Android-проекта. Локальный ключ Prism находится
+в `data/signing/prism-release.jks` в корне репозитория; ключ и оба файла настроек
+подписи исключены из git. Для резервной копии нужны все три файла.
+**Храни `prism-release.jks` в надёжном месте:** без
 того же ключа обновление поверх установленного приложения не встанет (подпись обязана
 совпадать). Иконка (`app-icon.png`) и TV-баннер уже в манифесте — приложение появляется
 на домашнем экране Android TV.
