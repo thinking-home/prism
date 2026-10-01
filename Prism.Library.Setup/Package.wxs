@@ -1,10 +1,15 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-    <Package Name="Prism Library" Manufacturer="Prism" Version="0.1.0"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+    <Package Name="Prism Library" Manufacturer="Prism" Version="$(ReleaseVersion)"
              UpgradeCode="A86F3841-D67E-496A-9BF2-2A92A226435F" Scope="perMachine">
         <MajorUpgrade DowngradeErrorMessage="A newer version of Prism Library is already installed." />
         <MediaTemplate EmbedCab="yes" />
+        <netfx:DotNetCompatibilityCheck Property="ASPNET_RUNTIME" RuntimeType="aspnet"
+            Platform="x64" Version="10.0.0" RollForward="latestPatch" />
+        <Launch Condition="Installed OR ASPNET_RUNTIME = &quot;0&quot;"
+            Message="Install ASP.NET Core Runtime 10 (x64) before installing Prism Library: https://dotnet.microsoft.com/download/dotnet/10.0" />
         <ui:WixUI Id="WixUI_Minimal" />
         <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
 

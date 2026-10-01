@@ -5,6 +5,8 @@
 .idea
 .vs
 .DS_Store
+artifacts/
+__pycache__/
 bin
 obj
 data

@@ -9,6 +9,7 @@
     <PropertyGroup>
         <InstallerPlatform>x64</InstallerPlatform>
         <OutputName>PrismHostSetup</OutputName>
+        <ReleaseVersion Condition="'$(ReleaseVersion)' == ''">0.3.1</ReleaseVersion>
     </PropertyGroup>
 
     <!-- В MSI кладётся сборка ffmpeg (essentials, GPL — см. License.rtf и
@@ -21,7 +22,7 @@
         <FFmpegUrl>https://www.gyan.dev/ffmpeg/builds/packages/$(FFmpegZip)</FFmpegUrl>
         <FFmpegCacheDir>$(MSBuildThisFileDirectory)obj\ffmpeg\</FFmpegCacheDir>
         <FFmpegBinDir>$(FFmpegCacheDir)ffmpeg-$(FFmpegVersion)-essentials_build\bin</FFmpegBinDir>
-        <DefineConstants>FFmpegBin=$(FFmpegBinDir)</DefineConstants>
+        <DefineConstants>FFmpegBin=$(FFmpegBinDir);ReleaseVersion=$(ReleaseVersion)</DefineConstants>
     </PropertyGroup>
 
     <Target Name="FetchFFmpeg" BeforeTargets="BeforeBuild"
@@ -40,6 +41,7 @@
         <PackageReference Include="WixToolset.Firewall.wixext" Version="6.0.2" />
         <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
         <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
+        <PackageReference Include="WixToolset.Netfx.wixext" Version="6.0.2" />
     </ItemGroup>
 
 </Project>

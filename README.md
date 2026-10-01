@@ -555,6 +555,13 @@ Android-плеер ([Prism.Player.Android](Prism.Player.Android/README.md)) уп
 Проверка: `Get-NetTCPConnection -State Listen -LocalPort 1883` должен показать
 адрес `0.0.0.0`, а не `127.0.0.1`.
 
+## Полный релиз
+
+Скрипт `scripts/release.py` собирает Windows MSI/ZIP, Linux TAR.GZ и подписанные
+Android APK плеера и библиотеки с общей версией, затем создаёт `SHA256SUMS.txt`.
+.NET runtime в пакеты не включается. Требования и команда запуска:
+[инструкция по сборке релиза](scripts/README.md).
+
 ## Конфигурация (`appsettings.json`, секция `Player`)
 
 У каждого запускаемого проекта свой `appsettings.json`: у `Prism.Host.Console` —

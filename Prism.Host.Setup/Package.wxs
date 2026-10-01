@@ -1,25 +1,34 @@
 <!-- Инсталлятор Prism Host: ставит службу (Prism.Host.Service) в Program Files,
      регистрирует её в Windows (автостарт, LocalSystem) и открывает входящие
-     подключения в брандмауэре для локальной сети. Всё декларативно; единственное
-     кастомное действие — закрытие лаунчера, и то из штатного расширения WiX
+     подключения в брандмауэре для локальной сети. Всё декларативно;
+     действия проверки .NET и закрытия лаунчера — из штатных расширений WiX
      (util:CloseApplication). Файлы берутся из publish-выхода проектов — bindpath'ы
      !(bindpath.*) создаёт ProjectReference Publish="true" в .wixproj. -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
-     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
 
     <!-- Инсталлятор не локализован (en-US по умолчанию): видимые пользователю
          строки — английские, это избавляет от возни с культурами и переводом
          строк расширений. -->
     <Package Name="Prism Host"
              Manufacturer="Prism"
-             Version="0.3.1"
+             Version="$(ReleaseVersion)"
              UpgradeCode="8360D512-7A9E-4DA9-8645-BD7E5D061883"
              Scope="perMachine">
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of Prism Host is already installed." />
         <MediaTemplate EmbedCab="yes" />
+        <netfx:DotNetCompatibilityCheck Property="ASPNET_RUNTIME" RuntimeType="aspnet"
+            Platform="x64" Version="10.0.0" RollForward="latestPatch" />
+        <netfx:DotNetCompatibilityCheck Property="DESKTOP_RUNTIME" RuntimeType="desktop"
+            Platform="x64" Version="10.0.0" RollForward="latestPatch" />
+        <Launch Condition="Installed OR ASPNET_RUNTIME = &quot;0&quot;"
+            Message="Install ASP.NET Core Runtime 10 (x64) before installing Prism Host: https://dotnet.microsoft.com/download/dotnet/10.0" />
+        <Launch Condition="Installed OR DESKTOP_RUNTIME = &quot;0&quot;"
+            Message="Install .NET Desktop Runtime 10 (x64) before installing Prism Launcher: https://dotnet.microsoft.com/download/dotnet/10.0" />
 
         <!-- Лаунчер живёт в трее и установку сам не замечает: MSI его не закрывал,
              поэтому после обновления в памяти оставался процесс старой версии, а
@@ -52,7 +61,7 @@
         <StandardDirectory Id="ProgramFiles64Folder">
             <Directory Id="INSTALLFOLDER" Name="Prism Host">
 
-                <!-- Служба публикуется одним exe (self-contained, PublishSingleFile),
+                <!-- Служба публикуется одним exe (framework-dependent, PublishSingleFile),
                      поэтому служба и её бинарь — один явный компонент. -->
                 <Component Id="HostService">
                     <File Id="PrismHostExe" Source="!(bindpath.Prism.Host.Service)\Prism.Host.Service.exe" KeyPath="yes">

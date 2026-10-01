@@ -22,8 +22,8 @@ android {
         applicationId = "org.prism.player" // уникальный id приложения в системе
         minSdk = 24                        // минимальная версия Android (7.0); покрывает Android 11 бокса
         targetSdk = 36                     // под какую версию тестировали
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("releaseVersion").orNull ?: "0.1"
     }
 
     // Включаем генерацию класса BuildConfig — нужен флаг BuildConfig.DEBUG,

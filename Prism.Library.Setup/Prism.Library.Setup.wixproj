@@ -2,13 +2,14 @@
     <PropertyGroup>
         <InstallerPlatform>x64</InstallerPlatform>
         <OutputName>PrismLibrarySetup</OutputName>
+        <ReleaseVersion Condition="'$(ReleaseVersion)' == ''">0.1.0</ReleaseVersion>
         <ClientDir>$(MSBuildThisFileDirectory)..\Prism.Client</ClientDir>
-        <DefineConstants>ClientDist=$(ClientDir)\dist</DefineConstants>
+        <DefineConstants>ClientDist=$(ClientDir)\dist;ReleaseVersion=$(ReleaseVersion)</DefineConstants>
     </PropertyGroup>
 
     <!-- MSI всегда содержит актуальную production-сборку веб-клиента.
          npm ci использует зафиксированный lock-файл; требуется Node.js/npm. -->
-    <Target Name="BuildWebClient" BeforeTargets="BeforeBuild">
+    <Target Name="BuildWebClient" BeforeTargets="BeforeBuild" Condition="'$(SkipWebClientBuild)' != 'true'">
         <Exec WorkingDirectory="$(ClientDir)" Command="npm ci --no-audit --no-fund" />
         <Exec WorkingDirectory="$(ClientDir)" Command="npm run build" />
         <Error Condition="!Exists('$(ClientDir)\dist\index.html')"
@@ -19,5 +20,6 @@
         <ProjectReference Include="..\Prism.Library.Service\Prism.Library.Service.csproj" Publish="true" />
         <PackageReference Include="WixToolset.Firewall.wixext" Version="6.0.2" />
         <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
+        <PackageReference Include="WixToolset.Netfx.wixext" Version="6.0.2" />
     </ItemGroup>
 </Project>
