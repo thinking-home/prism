@@ -4,7 +4,7 @@
     <color name="bg_dark">#282828</color>
     <color name="player_text">#E7E7E7</color>
     <color name="player_muted">#ABABAB</color>
-    <color name="player_focus">#4C4C4C</color>
+    <color name="player_focus">#414D66</color>
     <!-- Media3 resource overrides retain the stock layouts and interactions. -->
     <color name="exo_white">@color/player_text</color>
     <color name="exo_white_opacity_70">@color/player_muted</color>
