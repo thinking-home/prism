@@ -7,7 +7,7 @@
 ## English
 
 Privacy Policy — ThinkingHome Prism Player
-Last updated: October 24, 2026
+Last updated: October 25, 2026
 
 Scope and contact
 This policy covers ThinkingHome Prism Player for Android (ru.thinking_home.prism.player), published by Little Cow as part of the ThinkingHome ecosystem. Contact: dima117a@gmail.com. Project website: https://prism.thinking-home.ru/.
@@ -25,7 +25,7 @@ Media servers receive requests for media URLs, playlists, segments and related r
 Android media sessions expose playback information and controls to the system and connected media controllers. The app does not sell data or send it to advertising networks.
 
 Permissions and connection security
-Internet access supports MQTT and media streaming. Saving valid broker settings starts remote control. If you stop it, use Enable in Settings to restart it. While enabled, a foreground service and startup after device boot keep the player available for commands. You can stop it using the notification action. The network-state permission is required by Android for this network connected-device service; the app does not change network settings. A separate media service supports playback. Permission to display over other apps supports bringing the player to the screen for an incoming command; it is not used to capture other apps or screen content.
+Internet access supports MQTT and media streaming. Saving valid broker settings during initial setup starts remote control. If you stop it, the main screen shows “Remote control is stopped” and an “Enable remote control” button. Use that button to restart remote control; saving settings does not restart it after you have explicitly stopped it. While enabled, a foreground service and startup after device boot keep the player available for commands. You can stop it using the notification action. The network-state permission is required by Android for this network connected-device service; the app does not change network settings. A separate media service supports playback. Permission to display over other apps supports bringing the player to the screen for an incoming command; it is not used to capture other apps or screen content.
 Encryption depends on your configuration. Plain HTTP and tcp:// MQTT connections are supported and are not encrypted. Use HTTPS and TLS-enabled MQTT (ssl://) on servers you trust; do not send sensitive credentials over unencrypted connections.
 
 Retention, backups and deletion
@@ -39,7 +39,7 @@ Updates to this policy will be posted on the project website with a revised date
 ## Русский
 
 Политика конфиденциальности — ThinkingHome Prism Player
-Обновлено: 24 октября 2026 года
+Обновлено: 25 октября 2026 года
 
 Область действия и контакты
 Политика относится к ThinkingHome Prism Player для Android (ru.thinking_home.prism.player), опубликованному разработчиком Little Cow в экосистеме ThinkingHome. Контакт: dima117a@gmail.com. Сайт проекта: https://prism.thinking-home.ru/.
@@ -57,7 +57,7 @@ Updates to this policy will be posted on the project website with a revised date
 Медиасессия Android предоставляет сведения о воспроизведении и управление системе и подключённым медиаконтроллерам. Приложение не продаёт данные и не отправляет их рекламным сетям.
 
 Разрешения и защита соединений
-Доступ к интернету нужен для MQTT и загрузки медиа. Сохранение корректных настроек брокера запускает дистанционное управление. После остановки его можно запустить кнопкой «Включить» в настройках. При включённом управлении фоновая служба и запуск после перезагрузки поддерживают приём команд. Остановить управление можно кнопкой в уведомлении. Разрешение состояния сети требуется Android для сетевой службы связи с устройством; приложение не меняет настройки сети. Отдельная медиаслужба поддерживает воспроизведение. Разрешение показа поверх других приложений используется для вывода плеера на экран по входящей команде, а не для записи экрана или содержимого других приложений.
+Доступ к интернету нужен для MQTT и загрузки медиа. Сохранение корректных настроек брокера при первоначальной настройке запускает дистанционное управление. После его остановки на главном экране отображаются статус «Управление остановлено» и кнопка «Включить управление». Нажмите эту кнопку, чтобы возобновить управление; сохранение настроек не включает его повторно после явной остановки. При включённом управлении фоновая служба и запуск после перезагрузки поддерживают приём команд. Остановить управление можно кнопкой в уведомлении. Разрешение состояния сети требуется Android для сетевой службы связи с устройством; приложение не меняет настройки сети. Отдельная медиаслужба поддерживает воспроизведение. Разрешение показа поверх других приложений используется для вывода плеера на экран по входящей команде, а не для записи экрана или содержимого других приложений.
 Шифрование зависит от настроек. Поддерживаются незашифрованные HTTP и MQTT через tcp://. Используйте HTTPS и MQTT с TLS (ssl://) на доверенных серверах; не передавайте конфиденциальные учётные данные через незашифрованные соединения.
 
 Хранение, резервные копии и удаление
