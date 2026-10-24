@@ -18,7 +18,11 @@ object Settings {
     private const val KEY_PLAYER_ID = "player_id"
     private const val KEY_REMOTE_ENABLED = "remote_enabled"
 
-    fun remoteEnabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_REMOTE_ENABLED, false)
+    fun remoteEnabled(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_REMOTE_ENABLED, MqttEndpoint.isValid(brokerUrl(ctx)))
+
+    fun remoteExplicitlyStopped(ctx: Context): Boolean =
+        prefs(ctx).contains(KEY_REMOTE_ENABLED) && !prefs(ctx).getBoolean(KEY_REMOTE_ENABLED, true)
 
     fun setRemoteEnabled(ctx: Context, enabled: Boolean) {
         prefs(ctx).edit().putBoolean(KEY_REMOTE_ENABLED, enabled).apply()
@@ -83,6 +87,7 @@ object Settings {
             .putString(KEY_MQTT_USER, mqttUser)
             .putString(KEY_MQTT_PASSWORD, mqttPassword)
             .putString(KEY_PLAYER_NAME, playerName)
+            .putBoolean(KEY_REMOTE_ENABLED, !remoteExplicitlyStopped(ctx))
             .apply()
     }
 }

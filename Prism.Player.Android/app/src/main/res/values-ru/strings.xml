@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Русские строки (используются на устройствах с русским языком системы). -->
 <resources>
+    <string name="about_player_id">ID плеера</string>
+    <string name="remote_enable_action">Включить управление</string>
+    <string name="setup_action">Настроить плеер</string>
+    <string name="about_title">О приложении</string>
+    <string name="settings_title">Настройки</string>
+    <string name="navigate_back">Назад</string>
+    <string name="about_version">Версия %1$s</string>
+    <string name="browser_unavailable_url">Браузер не установлен. Откройте %1$s на другом устройстве.</string>
     <string name="remote_start_failed">Android не разрешил запуск управления. Откройте плеер повторно.</string>
-    <string name="remote_enabled">Включить дистанционное управление</string>
-    <string name="remote_explanation">Принимать MQTT-команды в фоне, в том числе после перезагрузки устройства. Выключите, чтобы остановить фоновое соединение. Без разрешения показа поверх других приложений для просмотра входящего видео откройте плеер.</string>
+    <string name="remote_stopped_message">Управление остановлено.</string>
     <string name="invalid_broker">Введите корректный адрес брокера с tcp://, ssl://, ws:// или wss://.</string>
-    <string name="mqtt_disabled">MQTT: управление выключено</string>
+    <string name="mqtt_not_configured">Плеер не настроен</string>
+    <string name="mqtt_stopped">Управление остановлено</string>
+    <string name="remote_start">Включить</string>
     <string name="remote_listening">Управление включено — ожидание MQTT-команд</string>
     <string name="remote_connecting">Управление включено — подключение к MQTT</string>
     <string name="remote_pending">Получена команда — откройте плеер для просмотра</string>
     <string name="remote_stop">Отключить управление</string>
-    <string name="notifications_denied">Уведомления выключены. Для просмотра входящего видео откройте плеер; отключить управление можно в настройках.</string>
+    <string name="notifications_denied">Уведомления выключены. Для просмотра входящего видео откройте плеер.</string>
     <string name="privacy_policy">Политика конфиденциальности</string>
     <string name="error_playback">Не удалось открыть видео</string>
     <string name="resume_from">Продолжаем с %1$s</string>

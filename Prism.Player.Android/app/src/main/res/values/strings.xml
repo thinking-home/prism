@@ -2,16 +2,26 @@
 <!-- Строки по умолчанию (английский). Русские — в values-ru/strings.xml.
      Язык выбирается автоматически по языку системы. -->
 <resources>
+    <string name="about_player_id">Player ID</string>
+    <string name="remote_enable_action">Enable remote control</string>
+    <string name="setup_action">Set up player</string>
+    <string name="about_title">About</string>
+    <string name="settings_title">Settings</string>
+    <string name="navigate_back">Back</string>
+    <string name="about_app_name" translatable="false">ThinkingHome\nPrism Player</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="browser_unavailable_url">No browser installed. Open %1$s on another device.</string>
     <string name="remote_start_failed">Android could not start remote control. Reopen the player to retry.</string>
-    <string name="remote_enabled">Enable remote control</string>
-    <string name="remote_explanation">Keep listening for MQTT commands, including after restarting the device. Turn this off to stop the background connection. Without permission to display over other apps, open the player to play an incoming video.</string>
+    <string name="remote_stopped_message">Remote control is stopped.</string>
     <string name="invalid_broker">Enter a valid tcp://, ssl://, ws:// or wss:// broker address.</string>
-    <string name="mqtt_disabled">MQTT: remote control off</string>
+    <string name="mqtt_not_configured">Player is not set up</string>
+    <string name="mqtt_stopped">Remote control is stopped</string>
+    <string name="remote_start">Enable</string>
     <string name="remote_listening">Remote control is on — listening for MQTT commands</string>
     <string name="remote_connecting">Remote control is on — connecting to MQTT</string>
     <string name="remote_pending">Video requested — open the player to watch</string>
     <string name="remote_stop">Stop remote control</string>
-    <string name="notifications_denied">Notifications are off. Open the player for incoming video; stop remote control in Settings.</string>
+    <string name="notifications_denied">Notifications are off. Open the player to watch incoming video.</string>
     <string name="privacy_policy">Privacy policy</string>
     <string name="error_playback">Failed to open video</string>
     <string name="resume_from">Continuing from %1$s</string>

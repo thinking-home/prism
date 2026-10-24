@@ -4,10 +4,18 @@ import android.os.Bundle
 import android.content.ComponentName
 import android.content.Intent
 import android.os.SystemClock
-import android.util.TypedValue
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.LinearLayout
 import android.view.Gravity
 import android.view.View
+import android.view.KeyEvent
 import android.widget.FrameLayout
+import android.widget.ArrayAdapter
+import androidx.appcompat.widget.ListPopupWindow
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
@@ -32,10 +40,21 @@ class MainActivity : AppCompatActivity() {
     private var playerView: PlayerView? = null
     private var menuView: View? = null
     private var settingsButton: View? = null
+    private var showSettingsFocus = false
+    private val focusHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val hideHomeFocus = Runnable {
+        if (isVisible && controller?.currentMediaItem == null && navigationMenu?.isShowing != true) {
+            setHomeFocusVisible(false)
+        }
+    }
+    private var navigationMenu: ListPopupWindow? = null
     private var statusText: TextView? = null
+    private var statusPanel: View? = null
+    private var recoveryButton: Button? = null
     private var errorText: TextView? = null
     private var controller: MediaController? = null
     private var lastBackMs = 0L // для «двойного Back» при закрытии фильма
+    private val statusListener: () -> Unit = { updateStatus() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,6 +75,8 @@ class MainActivity : AppCompatActivity() {
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     override fun onStart() {
         super.onStart()
+        focusHandler.removeCallbacks(hideHomeFocus)
+        showSettingsFocus = false
 
         // Гарантируем, что служба MQTT запущена как «переднего плана».
         isVisible = true
@@ -77,21 +98,21 @@ class MainActivity : AppCompatActivity() {
         // (штатный selectableItemBackgroundBorderless): прозрачный, с круглой подсветкой
         // фокуса/нажатия. ImageButton остаётся обычной кнопкой (фокус, клик).
         val settings = ImageButton(this).apply {
+            id = View.generateViewId()
+            contentDescription = getString(R.string.settings_title)
             setImageResource(R.drawable.ic_settings)
-            val bg = TypedValue()
-            context.theme.resolveAttribute(
-                android.R.attr.selectableItemBackgroundBorderless, bg, true,
-            )
-            setBackgroundResource(bg.resourceId)
-            val pad = (12 * resources.displayMetrics.density).toInt()
+            setColorFilter(PlayerUi.TEXT)
+            // Keep real focus for immediate OK activation, but leave the home
+            // screen quiet until the user starts navigating with the D-pad.
+            background = PlayerUi.surface(this@MainActivity, android.graphics.Color.TRANSPARENT)
+            val pad = PlayerUi.dp(this@MainActivity, 12)
             setPadding(pad, pad, pad, pad)
             layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
+                PlayerUi.dp(this@MainActivity, 48), PlayerUi.dp(this@MainActivity, 48),
                 Gravity.TOP or Gravity.END,
-            )
+            ).apply { topMargin = PlayerUi.dp(this@MainActivity, 24); marginEnd = PlayerUi.dp(this@MainActivity, 32) }
             setOnClickListener {
-                startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                showNavigationMenu(this)
             }
         }
 
@@ -106,10 +127,10 @@ class MainActivity : AppCompatActivity() {
         // Надпись об ошибке — по центру, поверх видео, скрыта до ошибки.
         val error = TextView(this).apply {
             text = getString(R.string.error_playback)
-            textSize = 20f
+            textSize = 18f
             visibility = View.GONE
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xCC000000.toInt())
+            setTextColor(PlayerUi.TEXT)
+            background = PlayerUi.surface(this@MainActivity, 0xE6323234.toInt())
             val p = (12 * resources.displayMetrics.density).toInt()
             setPadding(p, p, p, p)
             layoutParams = FrameLayout.LayoutParams(
@@ -118,23 +139,43 @@ class MainActivity : AppCompatActivity() {
                 Gravity.CENTER,
             )
         }
-        // Мелкий статус связи с брокером — у нижнего края.
-        val status = TextView(this).apply {
-            textSize = 12f
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
-            )
+        val status = PlayerUi.text(this, "", 13f, muted = true).apply { gravity = Gravity.CENTER }
+        val recovery = PlayerUi.button(this, getString(R.string.remote_enable_action)) {
+            if (!MqttEndpoint.isValid(Settings.brokerUrl(this))) {
+                startActivity(Intent(this, SettingsActivity::class.java))
+            } else {
+                Settings.setRemoteEnabled(this, true)
+                if (!MqttService.startIfEnabled(this, MqttService.ACTION_RELOAD)) {
+                    Settings.setRemoteEnabled(this, false)
+                    Toast.makeText(this, R.string.remote_start_failed, Toast.LENGTH_LONG).show()
+                } else if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                }
+                updateStatus()
+            }
+        }.apply {
+            id = View.generateViewId()
+            nextFocusUpId = settings.id
         }
-
+        settings.nextFocusDownId = recovery.id
+        val footer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(status)
+            addView(recovery, LinearLayout.LayoutParams(-2, -2).apply { topMargin = PlayerUi.dp(this@MainActivity, 12) })
+            layoutParams = FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
+                bottomMargin = PlayerUi.dp(this@MainActivity, 32)
+                leftMargin = PlayerUi.dp(this@MainActivity, 32)
+                rightMargin = PlayerUi.dp(this@MainActivity, 32)
+            }
+        }
         root.addView(logo)
         root.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT,
         )) // видео на весь экран
         root.addView(error)
-        root.addView(status)
+        root.addView(footer)
         root.addView(settings) // поверх, в правом верхнем углу
         setContentView(root)
         playerView = view
@@ -142,11 +183,13 @@ class MainActivity : AppCompatActivity() {
         settingsButton = settings
         errorText = error
         statusText = status
+        statusPanel = footer
+        recoveryButton = recovery
         settings.requestFocus() // фокус на шестерёнку — для пульта/D-pad
 
         // Показываем текущий статус брокера и слушаем изменения, пока экран открыт.
-        updateStatus(MqttStatus.connected)
-        MqttStatus.listener = { connected -> runOnUiThread { updateStatus(connected) } }
+        updateStatus()
+        MqttStatus.addListener(statusListener)
 
         // Подключаемся к сервису с медиа-сессией.
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
@@ -185,18 +228,99 @@ class MainActivity : AppCompatActivity() {
         playerView?.visibility = if (fileOpen) View.VISIBLE else View.GONE
         menuView?.visibility = if (fileOpen) View.GONE else View.VISIBLE
         settingsButton?.visibility = if (fileOpen) View.GONE else View.VISIBLE
-        statusText?.visibility = if (fileOpen) View.GONE else View.VISIBLE
-        if (!fileOpen) settingsButton?.requestFocus()
+        if (fileOpen) navigationMenu?.dismiss()
+        statusPanel?.visibility = if (fileOpen) View.GONE else View.VISIBLE
+        if (!fileOpen && navigationMenu?.isShowing != true && recoveryButton?.hasFocus() != true) settingsButton?.requestFocus()
         // Если ошибка случилась до подключения к сессии — показать надпись сейчас.
         if (controller.playerError != null) errorText?.visibility = View.VISIBLE
     }
 
-    private fun updateStatus(connected: Boolean) {
-        statusText?.text = getString(when {
-            !Settings.remoteEnabled(this) -> R.string.mqtt_disabled
-            connected -> R.string.mqtt_connected
-            else -> R.string.mqtt_disconnected
-        })
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Hidden focus must not activate an invisible selection, including after
+        // the idle timeout. Consume both key events so View cannot click on UP.
+        if (!showSettingsFocus && controller?.currentMediaItem == null &&
+            navigationMenu?.isShowing != true && event.keyCode in intArrayOf(
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            return true
+        }
+        if (event.action == KeyEvent.ACTION_DOWN &&
+            controller?.currentMediaItem == null && navigationMenu?.isShowing != true) {
+            if (event.keyCode in intArrayOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
+                setHomeFocusVisible(true)
+            }
+            restartFocusTimeout()
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        restartFocusTimeout()
+    }
+
+    private fun setHomeFocusVisible(visible: Boolean) {
+        showSettingsFocus = visible
+        settingsButton?.background = if (visible) PlayerUi.interactive(this, android.graphics.Color.TRANSPARENT)
+            else PlayerUi.surface(this, android.graphics.Color.TRANSPARENT)
+        recoveryButton?.background = if (visible) PlayerUi.interactive(this)
+            else PlayerUi.surface(this, PlayerUi.SURFACE)
+    }
+
+    private fun restartFocusTimeout() {
+        focusHandler.removeCallbacks(hideHomeFocus)
+        if (isVisible && showSettingsFocus && controller?.currentMediaItem == null && navigationMenu?.isShowing != true) {
+            focusHandler.postDelayed(hideHomeFocus, 8_000L)
+        }
+    }
+
+    private fun showNavigationMenu(anchor: View) {
+        navigationMenu?.dismiss()
+        val popup = ListPopupWindow(this).apply {
+            anchorView = anchor
+            verticalOffset = -anchor.height
+            setDropDownGravity(Gravity.END)
+            width = minOf((240 * resources.displayMetrics.density).toInt(), resources.displayMetrics.widthPixels)
+            isModal = true
+            setBackgroundDrawable(PlayerUi.surface(this@MainActivity, PlayerUi.SURFACE))
+            setListSelector(PlayerUi.interactive(this@MainActivity, android.graphics.Color.TRANSPARENT))
+            setAdapter(object : ArrayAdapter<String>(this@MainActivity, android.R.layout.simple_list_item_1,
+                listOf(getString(R.string.settings_title), getString(R.string.about_title))) {
+                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                    PlayerUi.text(this@MainActivity, getItem(position).orEmpty()).apply {
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(PlayerUi.dp(context, 20), PlayerUi.dp(context, 12), PlayerUi.dp(context, 20), PlayerUi.dp(context, 12))
+                        minHeight = PlayerUi.dp(context, 52)
+                    }
+            })
+            setOnItemClickListener { _, _, position, _ ->
+                dismiss()
+                val target = if (position == 0) SettingsActivity::class.java else AboutActivity::class.java
+                startActivity(Intent(this@MainActivity, target))
+            }
+            setOnDismissListener {
+                anchor.alpha = 1f
+                anchor.requestFocus()
+                restartFocusTimeout()
+            }
+        }
+        navigationMenu = popup
+        popup.show()
+        focusHandler.removeCallbacks(hideHomeFocus)
+        anchor.alpha = 0f
+        popup.setSelection(0)
+    }
+
+    private fun updateStatus() {
+        statusText?.text = getString(MqttStatus.textResource(this))
+        val configured = MqttEndpoint.isValid(Settings.brokerUrl(this))
+        val needsAction = !configured || Settings.remoteExplicitlyStopped(this)
+        recoveryButton?.apply {
+            val hadFocus = hasFocus()
+            setText(if (configured) R.string.remote_enable_action else R.string.setup_action)
+            visibility = if (needsAction) View.VISIBLE else View.GONE
+            if (hadFocus && !needsAction) settingsButton?.requestFocus()
+        }
     }
 
     // Back при открытом фильме — закрыть по ДВОЙНОМУ нажатию (чтобы случайно не сбросить
@@ -215,10 +339,13 @@ class MainActivity : AppCompatActivity() {
 
     // onStop — экран скрыт: пауза и отключение от сервиса (сервис/служба живут дальше).
     override fun onStop() {
+        navigationMenu?.dismiss()
+        navigationMenu = null
+        focusHandler.removeCallbacks(hideHomeFocus)
         isVisible = false
         super.onStop()
         controller?.pause() // пауза при сворачивании плеера в фон
-        MqttStatus.listener = null
+        MqttStatus.removeListener(statusListener)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         controller = null

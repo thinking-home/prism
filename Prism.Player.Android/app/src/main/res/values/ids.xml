@@ -1,0 +1,7 @@
+<resources>
+    <item type="id" name="player_name" />
+    <item type="id" name="broker_url" />
+    <item type="id" name="mqtt_user" />
+    <item type="id" name="mqtt_password" />
+    <item type="id" name="save_settings" />
+</resources>

@@ -9,5 +9,9 @@
         <item name="android:windowFullscreen">true</item>
         <item name="android:statusBarColor">@color/bg_dark</item>
         <item name="android:navigationBarColor">@color/bg_dark</item>
+        <item name="colorPrimary">#ADBEFF</item>
+        <item name="colorAccent">#ADBEFF</item>
+        <item name="colorControlActivated">#ADBEFF</item>
+        <item name="android:fontFamily">sans</item>
     </style>
 </resources>

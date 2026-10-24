@@ -51,6 +51,7 @@ class MqttService : Service() {
 
     private fun connect() {
         active = true
+        MqttStatus.setRunning(true)
         val currentGeneration = ++generation
         // «Пульт» к службе-плееру: командуем ей и читаем её состояние для state.
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
@@ -249,7 +250,7 @@ class MqttService : Service() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         controller = null
-        MqttStatus.set(false)
+        MqttStatus.setRunning(false)
     }
 
     override fun onDestroy() {
@@ -304,10 +305,10 @@ class MqttService : Service() {
                 ContextCompat.startForegroundService(context, Intent(context, MqttService::class.java).setAction(action))
                 true
             } catch (_: IllegalStateException) {
-                MqttStatus.set(false)
+                MqttStatus.setRunning(false)
                 false // Includes ForegroundServiceStartNotAllowedException on API 31+.
             } catch (_: SecurityException) {
-                MqttStatus.set(false)
+                MqttStatus.setRunning(false)
                 false
             }
         }

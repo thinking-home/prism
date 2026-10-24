@@ -48,7 +48,7 @@
             android:exported="false" />
 
         <activity
-            android:name=".PrivacyActivity"
+            android:name=".AboutActivity"
             android:exported="false" />
 
         <!-- Фоновый сервис с медиа-сессией. intent-filter делает его доступным

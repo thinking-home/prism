@@ -1,117 +1,82 @@
 package org.prism.player
 
 import android.app.Activity
-import android.content.Intent
 import android.os.Bundle
-import android.os.Build
-import android.Manifest
-import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.text.InputType
-import android.widget.Button
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
-import android.widget.Switch
 import android.widget.Toast
-import androidx.core.content.ContextCompat
 
-// Экран редактирования настроек. Поля с подписями + кнопка «Сохранить».
-// Собран из обычных View (как остальной UI), чтобы работал пультом/D-pad на ТВ.
 class SettingsActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
-
-        // Вспомогательный метод: добавить подпись + поле ввода и вернуть само поле.
-        fun field(label: String, value: String, type: Int): EditText {
-            container.addView(TextView(this).apply { text = label })
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or
+            android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        val content = PlayerUi.page(this, getString(R.string.settings_title))
+        fun dp(value: Int) = PlayerUi.dp(this, value)
+        fun field(id: Int, label: Int, value: String, type: Int): EditText {
+            content.addView(PlayerUi.text(this, getString(label), 13f, muted = true),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
             val edit = EditText(this).apply {
-                setText(value)
+                this.id = id
                 inputType = type
+                setSingleLine(true)
+                setText(value)
+                textSize = 16f
+                typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                setTextColor(PlayerUi.TEXT)
+                setHintTextColor(PlayerUi.MUTED)
+                backgroundTintList = null
+                background = PlayerUi.interactive(this@SettingsActivity)
+                setPadding(dp(16), dp(10), dp(16), dp(10))
+                imeOptions = EditorInfo.IME_ACTION_NEXT
+                setSelectAllOnFocus(true)
             }
-            container.addView(edit)
+            content.addView(edit, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(16) })
             return edit
         }
-
-        val uriType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        val brokerField = field(getString(R.string.settings_broker), Settings.brokerUrl(this), uriType)
-        val userField = field(
-            getString(R.string.settings_user), Settings.mqttUser(this), InputType.TYPE_CLASS_TEXT,
-        )
-        val passField = field(
-            getString(R.string.settings_password), Settings.mqttPassword(this),
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
-        )
-        val nameField = field(
-            getString(R.string.settings_name), Settings.playerName(this), InputType.TYPE_CLASS_TEXT,
-        )
-
-        // Идентификатор плеера — только для чтения (генерируется автоматически).
-        container.addView(TextView(this).apply { text = getString(R.string.settings_player_id) })
-        container.addView(TextView(this).apply { text = Settings.playerId(this@SettingsActivity) })
-
-        val save = Button(this).apply { text = getString(R.string.settings_save) }
-        val remote = Switch(this).apply {
-            text = getString(R.string.remote_enabled)
-            isChecked = Settings.remoteEnabled(this@SettingsActivity)
-        }
-        container.addView(remote)
-        container.addView(TextView(this).apply { text = getString(R.string.remote_explanation) })
-        container.addView(save)
-
-        save.setOnClickListener {
-            val broker = brokerField.text.toString().trim()
-            if (remote.isChecked && !MqttEndpoint.isValid(broker)) {
-                brokerField.error = getString(R.string.invalid_broker)
-                brokerField.requestFocus()
-                return@setOnClickListener
-            }
-            Settings.save(
-                this,
-                broker,
-                userField.text.toString().trim(),
-                passField.text.toString(),
-                nameField.text.toString().trim(),
-            )
-            Settings.setRemoteEnabled(this, remote.isChecked)
-            if (remote.isChecked) {
-                if (!MqttService.startIfEnabled(this, MqttService.ACTION_RELOAD)) {
+        val name = field(R.id.player_name, R.string.settings_name, Settings.playerName(this),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        val broker = field(R.id.broker_url, R.string.settings_broker, Settings.brokerUrl(this),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        broker.hint = "tcp://192.168.1.10:1883"
+        val user = field(R.id.mqtt_user, R.string.settings_user, Settings.mqttUser(this), InputType.TYPE_CLASS_TEXT)
+        val password = field(R.id.mqtt_password, R.string.settings_password, Settings.mqttPassword(this),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        password.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        password.imeOptions = EditorInfo.IME_ACTION_DONE
+        val save = PlayerUi.button(this, getString(R.string.settings_save)) {
+            val address = broker.text.toString().trim()
+            if (!MqttEndpoint.isValid(address)) {
+                broker.error = getString(R.string.invalid_broker)
+                broker.requestFocus()
+            } else {
+                Settings.save(this, address, user.text.toString().trim(), password.text.toString(), name.text.toString().trim())
+                if (Settings.canRunRemote(this) && !MqttService.startIfEnabled(this, MqttService.ACTION_RELOAD)) {
                     Toast.makeText(this, R.string.remote_start_failed, Toast.LENGTH_LONG).show()
                 }
-                if (Build.VERSION.SDK_INT >= 33 &&
-                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                if (Settings.canRunRemote(this) && android.os.Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
                 } else finish()
-            } else {
-                stopService(Intent(this, MqttService::class.java))
-                finish()
             }
+        }.apply { id = R.id.save_settings }
+        content.addView(save, LinearLayout.LayoutParams(-2, dp(48)).apply { topMargin = dp(4) })
+        password.setOnEditorActionListener { _, action, _ ->
+            if (action == EditorInfo.IME_ACTION_DONE) {
+                (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                    .hideSoftInputFromWindow(password.windowToken, 0)
+                save.requestFocus()
+                true
+            } else false
         }
-
-        container.addView(Button(this).apply {
-            text = getString(R.string.privacy_policy)
-            setOnClickListener {
-                startActivity(Intent(this@SettingsActivity, PrivacyActivity::class.java))
-            }
-        })
-
-        setContentView(ScrollView(this).apply { addView(container) })
+        name.requestFocus()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1) {
-            if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, R.string.notifications_denied, Toast.LENGTH_LONG).show()
-            }
-            finish()
-        }
+        if (requestCode == 1) finish()
     }
 }
