@@ -2,4 +2,12 @@
 <resources>
     <!-- Тёмный фон интерфейса (мягкий, не чистый чёрный) — против выгорания экрана ТВ. -->
     <color name="bg_dark">#282828</color>
+    <color name="player_text">#E7E7E7</color>
+    <color name="player_muted">#ABABAB</color>
+    <color name="player_focus">#4C4C4C</color>
+    <!-- Media3 resource overrides retain the stock layouts and interactions. -->
+    <color name="exo_white">@color/player_text</color>
+    <color name="exo_white_opacity_70">@color/player_muted</color>
+    <color name="exo_bottom_bar_background">#E6323232</color>
+    <color name="exo_black_opacity_70">#F2323232</color>
 </resources>

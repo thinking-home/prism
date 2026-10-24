@@ -16,10 +16,10 @@ import android.widget.TextView
 
 /** Shared visual language for the TV screens, including visible D-pad focus. */
 object PlayerUi {
-    const val TEXT = 0xFFE7E7EB.toInt()
-    const val MUTED = 0xFFABABB3.toInt()
-    const val SURFACE = 0xFF323234.toInt()
-    const val FOCUS = 0xFF4B5875.toInt()
+    const val TEXT = 0xFFE7E7E7.toInt()
+    const val MUTED = 0xFFABABAB.toInt()
+    const val SURFACE = 0xFF323232.toInt()
+    const val FOCUS = 0xFF4C4C4C.toInt()
     fun dp(ctx: Context, value: Int) = (value * ctx.resources.displayMetrics.density).toInt()
 
     fun surface(ctx: Context, color: Int) = GradientDrawable().apply {

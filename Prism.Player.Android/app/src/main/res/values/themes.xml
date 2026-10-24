@@ -9,9 +9,12 @@
         <item name="android:windowFullscreen">true</item>
         <item name="android:statusBarColor">@color/bg_dark</item>
         <item name="android:navigationBarColor">@color/bg_dark</item>
-        <item name="colorPrimary">#ADBEFF</item>
-        <item name="colorAccent">#ADBEFF</item>
-        <item name="colorControlActivated">#ADBEFF</item>
+        <item name="colorPrimary">@color/player_text</item>
+        <item name="colorAccent">@color/player_text</item>
+        <item name="colorControlActivated">@color/player_text</item>
+        <item name="android:colorAccent">@color/player_text</item>
+        <item name="android:textColorHighlight">#664C4C4C</item>
+        <item name="android:selectableItemBackground">@drawable/player_control_focus</item>
         <item name="android:fontFamily">sans</item>
     </style>
 </resources>

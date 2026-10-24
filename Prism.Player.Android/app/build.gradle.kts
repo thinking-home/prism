@@ -22,7 +22,7 @@ android {
         applicationId = "ru.thinking_home.prism.player" // идентификатор карточки Google Play
         minSdk = 24                        // минимальная версия Android (7.0); покрывает Android 11 бокса
         targetSdk = 36                     // под какую версию тестировали
-        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 19
+        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 23
         versionName = providers.gradleProperty("releaseVersion").orNull ?: "0.4.1"
     }
 

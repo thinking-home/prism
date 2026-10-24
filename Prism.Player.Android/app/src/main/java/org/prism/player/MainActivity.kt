@@ -120,6 +120,7 @@ class MainActivity : AppCompatActivity() {
         // Кнопка субтитров (CC) на панели управления: по умолчанию Media3 её
         // прячет, без неё субтитры с пульта не включить.
         view.setShowSubtitleButton(true)
+        PlaybackUi.apply(view)
         // Чёрный фон под видео: иначе в полях по краям кадра (когда пропорции
         // фильма не совпадают с экраном) просвечивает серый фон приложения.
         view.setBackgroundColor(0xFF000000.toInt())
@@ -130,7 +131,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 18f
             visibility = View.GONE
             setTextColor(PlayerUi.TEXT)
-            background = PlayerUi.surface(this@MainActivity, 0xE6323234.toInt())
+            background = PlayerUi.surface(this@MainActivity, 0xE6323232.toInt())
             val p = (12 * resources.displayMetrics.density).toInt()
             setPadding(p, p, p, p)
             layoutParams = FrameLayout.LayoutParams(
