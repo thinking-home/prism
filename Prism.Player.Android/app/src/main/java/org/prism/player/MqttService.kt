@@ -7,9 +7,11 @@ import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Handler
+import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -185,13 +187,14 @@ class MqttService : Service() {
     // Простое постоянное уведомление службы.
     private fun buildNotification(): Notification {
         val manager = getSystemService(NotificationManager::class.java)
-        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            manager.getNotificationChannel(CHANNEL_ID) == null) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Prism Player", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "ThinkingHome Prism Player", NotificationManager.IMPORTANCE_LOW)
             )
         }
-        return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Prism Player")
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("ThinkingHome Prism Player")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setOngoing(true)
             .build()

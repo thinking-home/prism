@@ -1,6 +1,6 @@
 package org.prism.player
 
-import android.app.Activity
+import android.os.Bundle
 import android.content.ComponentName
 import android.content.Intent
 import android.os.SystemClock
@@ -12,6 +12,9 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -24,7 +27,7 @@ import com.google.common.util.concurrent.MoreExecutors
 // Экран показывает либо видео (когда файл открыт), либо главный экран: логотип по
 // центру + кнопка-шестерёнка «Настройки» в правом верхнем углу. Внизу — статус
 // брокера; при ошибке — надпись поверх видео.
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var playerView: PlayerView? = null
@@ -35,12 +38,28 @@ class MainActivity : Activity() {
     private var controller: MediaController? = null
     private var lastBackMs = 0L // для «двойного Back» при закрытии фильма
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (controller?.currentMediaItem == null) {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                } else {
+                    closePlaybackOnBack()
+                }
+            }
+        })
+    }
+
     // onStart — экран становится видимым.
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     override fun onStart() {
         super.onStart()
 
         // Гарантируем, что служба MQTT запущена как «переднего плана».
-        startForegroundService(Intent(this, MqttService::class.java))
+        ContextCompat.startForegroundService(this, Intent(this, MqttService::class.java))
 
         val root = FrameLayout(this)
 
@@ -175,12 +194,8 @@ class MainActivity : Activity() {
     // Back при открытом фильме — закрыть по ДВОЙНОМУ нажатию (чтобы случайно не сбросить
     // прогресс): первый Back — подсказка, второй в течение 3 с — закрыть и вернуться в меню.
     // Из меню Back — обычный выход из приложения.
-    override fun onBackPressed() {
-        val c = controller
-        if (c == null || c.currentMediaItem == null) {
-            super.onBackPressed()
-            return
-        }
+    private fun closePlaybackOnBack() {
+        val c = controller ?: return
         val now = SystemClock.elapsedRealtime()
         if (now - lastBackMs < 3000) {
             c.clearMediaItems() // второй Back — закрыть фильм

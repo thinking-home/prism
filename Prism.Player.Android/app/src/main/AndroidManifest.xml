@@ -20,7 +20,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
-        android:label="Prism Player"
+        android:label="ThinkingHome Prism Player"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
         android:theme="@style/AppTheme"
@@ -43,6 +43,10 @@
         <!-- Экран настроек (адреса, id, имя). Открывается кнопкой с главного экрана. -->
         <activity
             android:name=".SettingsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".PrivacyActivity"
             android:exported="false" />
 
         <!-- Фоновый сервис с медиа-сессией. intent-filter делает его доступным

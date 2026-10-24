@@ -19,6 +19,7 @@ export default defineConfig({
       { text: "Руководство", link: "/guide/what-is-prism" },
       { text: "Компоненты", link: "/components/" },
       { text: "API", link: "/api/http" },
+      { text: "Конфиденциальность плеера", link: "/player-privacy" },
       { text: "GitHub", link: "https://github.com/thinking-home/prism" },
     ],
 

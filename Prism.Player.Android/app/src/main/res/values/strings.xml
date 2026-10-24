@@ -2,6 +2,7 @@
 <!-- Строки по умолчанию (английский). Русские — в values-ru/strings.xml.
      Язык выбирается автоматически по языку системы. -->
 <resources>
+    <string name="privacy_policy">Privacy policy</string>
     <string name="error_playback">Failed to open video</string>
     <string name="resume_from">Continuing from %1$s</string>
     <string name="back_to_close">Press Back again to close</string>

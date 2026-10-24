@@ -9,6 +9,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 
 // Экран редактирования настроек. Поля с подписями + кнопка «Сохранить».
 // Собран из обычных View (как остальной UI), чтобы работал пультом/D-pad на ТВ.
@@ -64,9 +65,16 @@ class SettingsActivity : Activity() {
             )
             // Перезапускаем службу MQTT — она перечитает брокер/id и переподключится.
             stopService(Intent(this, MqttService::class.java))
-            startForegroundService(Intent(this, MqttService::class.java))
+            ContextCompat.startForegroundService(this, Intent(this, MqttService::class.java))
             finish()
         }
+
+        container.addView(Button(this).apply {
+            text = getString(R.string.privacy_policy)
+            setOnClickListener {
+                startActivity(Intent(this@SettingsActivity, PrivacyActivity::class.java))
+            }
+        })
 
         setContentView(ScrollView(this).apply { addView(container) })
     }

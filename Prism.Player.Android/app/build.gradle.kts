@@ -19,11 +19,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "org.prism.player" // уникальный id приложения в системе
+        applicationId = "ru.thinking_home.prism.player" // идентификатор карточки Google Play
         minSdk = 24                        // минимальная версия Android (7.0); покрывает Android 11 бокса
         targetSdk = 36                     // под какую версию тестировали
-        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 1
-        versionName = providers.gradleProperty("releaseVersion").orNull ?: "0.1"
+        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 6
+        versionName = providers.gradleProperty("releaseVersion").orNull ?: "0.4.1"
     }
 
     // Включаем генерацию класса BuildConfig — нужен флаг BuildConfig.DEBUG,

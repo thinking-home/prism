@@ -173,6 +173,38 @@ Android TV; координация (напр. ThinkingHome) — снаружи, 
 
 ## Сборка
 
+### Google Play
+
+Название приложения: **ThinkingHome Prism Player**. Идентификатор для Google Play:
+`ru.thinking_home.prism.player` (отличается от прежнего `org.prism.player`, поэтому
+установка считается отдельным приложением). Namespace исходников остаётся прежним.
+
+Для загрузки в Play Console нужен подписанный AAB. Из папки проекта в PowerShell:
+
+```powershell
+./gradlew.bat bundleRelease lintRelease '-PreleaseVersion=0.4.1' '-PreleaseVersionCode=6'
+```
+
+Результат: `app/build/outputs/bundle/release/app-release.aab`. Для следующего выпуска
+задайте versionCode больше всех ранее загруженных в Play Console. Release использует
+существующий ключ из `keystore.properties`; перед сборкой убедитесь, что файл и ключ
+доступны. Не загружайте ключ или конфигурацию с паролями вместе с AAB.
+
+Для переноса подписи на другой компьютер положите ключ `prism-release.jks` и
+переносимый `keystore.properties` с `storeFile=prism-release.jks` в корень этого
+Android-проекта. Оба файла исключены из Git. Ключ подписи приложения в Google Play
+App Signing выбирается отдельно в консоли; локальный ключ может служить ключом загрузки.
+
+Успешная сборка и lint не заменяют проверку на Android TV и модерацию Google Play.
+
+Политика конфиденциальности: `docs/player-privacy.md` для сайта и
+`app/src/main/assets/privacy-en.txt` / `privacy-ru.txt` для встроенного экрана.
+При изменении текста обновляйте все три файла согласованно. Экран открывается
+из настроек, работает без браузера и интернета. После публикации сайта адрес
+для Play Console: `https://prism.thinking-home.ru/player-privacy`.
+
+### Локальная сборка
+
 Требуется Android Studio / Android SDK (платформа 36, Build Tools 36.0.0 и `adb`).
 Оба Android-проекта собираются на **JDK 25**: Gradle Wrapper 9.1.0,
 Android Gradle Plugin 9.0.1 и встроенный Kotlin 2.3.0. `JAVA_HOME` должен
