@@ -1,127 +1,135 @@
 package org.prism.player
 
-import android.os.Handler
-import android.os.Looper
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
-import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
+import org.eclipse.paho.client.mqttv3.MqttCallback
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
 
-// Подключается к MQTT-брокеру, слушает команды и передаёт их наружу колбэками
-// (onOpen(url)/onClose()/onRefresh()), а также умеет публиковать сообщения (publish).
-// onConnected зовётся при (пере)подключении — сервис публикует туда info/state.
-// Сам плеер здесь не трогаем — этим занимается сервис (в главном потоке).
-// Адрес брокера, id, топик и логин/пароль приходят из настроек (Settings).
-// Подключение — с бесконечными повторами: если брокер недоступен, пробуем снова
-// каждые несколько секунд; состояние связи публикуем в MqttStatus.
+// One worker owns the client, including connect, subscribe, publish and close.
+// No Paho automatic reconnect survives stop(); callbacks are delivered on the UI thread.
 class MqttController(
     private val brokerUrl: String,
     private val clientId: String,
     private val cmdTopic: String,
     private val mqttUser: String,
     private val mqttPassword: String,
-    private val onOpen: (url: String) -> Unit,
+    private val onOpen: (String) -> Unit,
     private val onClose: () -> Unit,
     private val onConnected: () -> Unit,
     private val onRefresh: () -> Unit,
+    private val dispatch: (() -> Unit) -> Unit,
+    private val onConnectionChange: (Boolean) -> Unit,
 ) {
-    // Главный поток — на нём живёт плеер, туда переключаемся перед вызовом колбэков.
-    private val main = Handler(Looper.getMainLooper())
-    private var client: MqttClient? = null
-    // Пока true — цикл подключения работает; при stop() ставим false и выходим.
+    private val worker = Executors.newSingleThreadScheduledExecutor()
+    private var client: MqttClient? = null // accessed only by worker
     @Volatile private var running = false
-    private var thread: Thread? = null
-    // Отдельный поток для отправки — чтобы не трогать сеть из главного потока.
-    private var publisher: ExecutorService? = null
+    private var started = false
 
+    @Synchronized
     fun start() {
-        // Не настроено (нет брокера или топика) — не подключаемся, служба живёт дальше.
-        if (brokerUrl.isEmpty() || cmdTopic.isEmpty()) return
+        if (started) return
+        started = true
+        if (!MqttEndpoint.isValid(brokerUrl) || cmdTopic.isBlank()) {
+            worker.shutdown()
+            return
+        }
         running = true
-        publisher = Executors.newSingleThreadExecutor()
-        // Сеть нельзя в главном потоке — подключаемся в отдельном.
-        thread = Thread { connectLoop() }.also { it.start() }
+        worker.execute { connect() }
     }
 
-    // Пробуем подключиться, пока не выйдет или пока не остановят. Ресурсы не текут:
-    // один клиент и один поток, между попытками — сон.
-    private fun connectLoop() {
-        val c = MqttClient(brokerUrl, clientId, MemoryPersistence())
-        client = c
-        val options = MqttConnectOptions().apply {
-            isAutomaticReconnect = true   // после первого коннекта Paho сам держит связь
-            isCleanSession = true
-            // Логин/пароль — только если заданы (иначе анонимный вход).
-            if (mqttUser.isNotEmpty()) {
-                userName = mqttUser
-                password = mqttPassword.toCharArray()
+    private fun deliver(callback: () -> Unit) {
+        if (running) dispatch { if (running) callback() }
+    }
+
+    private fun connect() {
+        if (!running) return
+        try {
+            val c = client ?: MqttClient(brokerUrl, clientId, MemoryPersistence()).also {
+                client = it
+                it.setCallback(object : MqttCallback {
+                    override fun connectionLost(cause: Throwable?) {
+                        deliver { onConnectionChange(false) }
+                        // A single scheduled loop below owns reconnection.
+                    }
+                    override fun deliveryComplete(token: IMqttDeliveryToken?) {}
+                    override fun messageArrived(topic: String, message: MqttMessage) {
+                        if (running) handle(message.payload.toString(Charsets.UTF_8))
+                    }
+                })
             }
-        }
-        c.setCallback(object : MqttCallbackExtended {
-            // Вызывается при первом подключении И при каждом авто-переподключении.
-            override fun connectComplete(reconnect: Boolean, serverURI: String?) {
-                try { c.subscribe(cmdTopic) } catch (_: Exception) {} // подписку надо возобновлять
-                MqttStatus.set(true)
-                onConnected() // опубликовать info/state при (пере)подключении
-            }
-            override fun connectionLost(cause: Throwable?) { MqttStatus.set(false) }
-            override fun deliveryComplete(token: IMqttDeliveryToken?) {}
-            override fun messageArrived(topic: String, message: MqttMessage) {
-                handle(String(message.payload))
-            }
-        })
-        while (running) {
-            try {
+            if (!c.isConnected) {
+                val options = MqttConnectOptions().apply {
+                    isAutomaticReconnect = false
+                    isCleanSession = true
+                    connectionTimeout = 5
+                    keepAliveInterval = 30
+                    if (mqttUser.isNotEmpty()) {
+                        userName = mqttUser
+                        password = mqttPassword.toCharArray()
+                    }
+                }
+                c.setTimeToWait(5000)
                 c.connect(options)
-                return // подключились; дальнейшие обрывы держит isAutomaticReconnect
-            } catch (e: Exception) {
-                MqttStatus.set(false)
-                try { Thread.sleep(RETRY_DELAY_MS) } catch (ie: InterruptedException) { return }
+                if (!running) return
+                c.subscribe(cmdTopic)
+                deliver { onConnectionChange(true); onConnected() }
+            }
+        } catch (_: Exception) {
+            closeClient()
+            deliver { onConnectionChange(false) }
+        } finally {
+            if (running) {
+                try { worker.schedule({ connect() }, 5, TimeUnit.SECONDS) }
+                catch (_: RejectedExecutionException) { /* stopped concurrently */ }
             }
         }
     }
 
-    // Опубликовать сообщение в топик (в фоне — сеть нельзя из главного потока).
     fun publish(topic: String, payload: String, retain: Boolean) {
-        val c = client ?: return
-        publisher?.execute {
-            try {
-                if (c.isConnected) c.publish(topic, payload.toByteArray(), 1, retain)
-            } catch (_: Exception) {}
-        }
+        if (!running) return
+        try {
+            worker.execute {
+                if (running) {
+                    try {
+                        client?.takeIf { it.isConnected }?.publish(topic, payload.toByteArray(Charsets.UTF_8), 1, retain)
+                    } catch (_: Exception) { /* connection loop retries */ }
+                }
+            }
+        } catch (_: RejectedExecutionException) { /* stopped concurrently */ }
     }
 
+    @Synchronized
     fun stop() {
         running = false
-        thread?.interrupt() // прервать сон, если сейчас ждём между попытками
-        thread = null
-        publisher?.shutdownNow()
-        publisher = null
-        val c = client
-        client = null
-        Thread { try { c?.disconnectForcibly(); c?.close() } catch (_: Exception) {} }.start()
+        started = true // this controller is single-use
+        if (worker.isShutdown) return
+        // Connection timeout bounds cleanup, without blocking the main thread.
+        worker.execute { closeClient() }
+        worker.shutdown()
     }
 
-    // Разбираем JSON-команду и вызываем нужный колбэк В ГЛАВНОМ ПОТОКЕ.
+    private fun closeClient() {
+        val c = client ?: return
+        client = null
+        try { c.disconnectForcibly(0, 1000, false) } catch (_: Exception) {}
+        try { c.close(true) } catch (_: Exception) {}
+    }
+
     private fun handle(payload: String) {
-        val json = try { JSONObject(payload) } catch (e: Exception) { return }
+        val json = try { JSONObject(payload) } catch (_: Exception) { return }
         when (json.optString("action")) {
             "open" -> {
                 val url = json.optString("url")
-                if (url.isNotEmpty()) main.post { onOpen(url) }
+                if (url.isNotEmpty()) deliver { onOpen(url) }
             }
-            "close" -> main.post { onClose() }
-            "refresh" -> main.post { onRefresh() } // немедленно перепубликовать статус
+            "close" -> deliver { onClose() }
+            "refresh" -> deliver { onRefresh() }
         }
-    }
-
-    companion object {
-        // Интервал между попытками подключения к брокеру.
-        private const val RETRY_DELAY_MS = 5000L
     }
 }

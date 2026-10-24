@@ -3,7 +3,6 @@ package org.prism.player
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
 
 // Приёмник системного события: срабатывает, когда устройство загрузилось.
 // Его задача — запустить нашу службу воспроизведения, чтобы MQTT слушал команды
@@ -11,10 +10,8 @@ import androidx.core.content.ContextCompat
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            // Запускаем всегда-живую службу MQTT (она подхватит и плеер при команде).
-            val service = Intent(context, MqttService::class.java)
-            ContextCompat.startForegroundService(context, service)
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED && Settings.canRunRemote(context)) {
+            MqttService.startIfEnabled(context)
         }
     }
 }

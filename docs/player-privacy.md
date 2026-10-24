@@ -16,7 +16,7 @@ What the app does
 The app plays media from URLs supplied by your controller through an MQTT broker that you configure. It does not require a developer-hosted account. The app has no advertising, analytics or automatic crash-reporting service integrated by the developer.
 
 Data stored on your device
-The app stores your MQTT broker address, optional username and password, player display name and a randomly generated player identifier in its private Android app storage. The identifier identifies this installation; it is not an advertising ID or hardware identifier. Credentials are not additionally encrypted by the app.
+The app stores whether you enabled remote control, your MQTT broker address, optional username and password, player display name and a randomly generated player identifier in its private Android app storage. The identifier identifies this installation; it is not an advertising ID or hardware identifier. Credentials are not additionally encrypted by the app.
 To resume playback, it stores media URLs, playback positions and save timestamps for up to 100 items. Older entries are removed as new ones are added. An entry is removed when a saved position is near the beginning or at least 95% through the media.
 
 Network transfers and recipients
@@ -25,7 +25,7 @@ Media servers receive requests for media URLs, playlists, segments and related r
 Android media sessions expose playback information and controls to the system and connected media controllers. The app does not sell data or send it to advertising networks.
 
 Permissions and connection security
-Internet access supports MQTT and media streaming. Foreground services, notifications and startup after device boot support playback and remote commands. Permission to display over other apps supports bringing the player to the screen for an incoming command; it is not used to capture other apps or screen content.
+Internet access supports MQTT and media streaming. Remote control is off until you enable it in Settings. While enabled, a foreground service and startup after device boot keep the player available for commands. You can turn it off in Settings or the notification. The network-state permission is required by Android for this network connected-device service; the app does not change network settings. A separate media service supports playback. Permission to display over other apps supports bringing the player to the screen for an incoming command; it is not used to capture other apps or screen content.
 Encryption depends on your configuration. Plain HTTP and tcp:// MQTT connections are supported and are not encrypted. Use HTTPS and TLS-enabled MQTT (ssl://) on servers you trust; do not send sensitive credentials over unencrypted connections.
 
 Retention, backups and deletion
@@ -48,7 +48,7 @@ Updates to this policy will be posted on the project website with a revised date
 Приложение воспроизводит медиа по URL, полученным от вашего контроллера через настроенный вами MQTT-брокер. Учётная запись на сервере разработчика не требуется. Разработчик не встроил в приложение рекламу, аналитику или автоматическую отправку отчётов о сбоях.
 
 Данные на устройстве
-В закрытом хранилище приложения Android сохраняются адрес MQTT-брокера, необязательные логин и пароль, имя плеера и случайно созданный идентификатор плеера. Он обозначает установку приложения и не является рекламным или аппаратным идентификатором. Приложение не применяет дополнительное шифрование сохранённых учётных данных.
+В закрытом хранилище приложения Android сохраняются выбор включения дистанционного управления, адрес MQTT-брокера, необязательные логин и пароль, имя плеера и случайно созданный идентификатор плеера. Он обозначает установку приложения и не является рекламным или аппаратным идентификатором. Приложение не применяет дополнительное шифрование сохранённых учётных данных.
 Для продолжения просмотра сохраняются URL медиа, позиции воспроизведения и время сохранения — до 100 записей. При добавлении новых старые записи вытесняются. Запись удаляется при сохранении позиции у начала медиа или после просмотра не менее 95% его длительности.
 
 Передача данных и получатели
@@ -57,7 +57,7 @@ Updates to this policy will be posted on the project website with a revised date
 Медиасессия Android предоставляет сведения о воспроизведении и управление системе и подключённым медиаконтроллерам. Приложение не продаёт данные и не отправляет их рекламным сетям.
 
 Разрешения и защита соединений
-Доступ к интернету нужен для MQTT и загрузки медиа. Фоновые службы, уведомления и запуск после перезагрузки поддерживают воспроизведение и приём команд. Разрешение показа поверх других приложений используется для вывода плеера на экран по входящей команде, а не для записи экрана или содержимого других приложений.
+Доступ к интернету нужен для MQTT и загрузки медиа. Дистанционное управление выключено до включения в настройках. При включённом управлении фоновая служба и запуск после перезагрузки поддерживают приём команд. Отключить управление можно в настройках или уведомлении. Разрешение состояния сети требуется Android для сетевой службы связи с устройством; приложение не меняет настройки сети. Отдельная медиаслужба поддерживает воспроизведение. Разрешение показа поверх других приложений используется для вывода плеера на экран по входящей команде, а не для записи экрана или содержимого других приложений.
 Шифрование зависит от настроек. Поддерживаются незашифрованные HTTP и MQTT через tcp://. Используйте HTTPS и MQTT с TLS (ssl://) на доверенных серверах; не передавайте конфиденциальные учётные данные через незашифрованные соединения.
 
 Хранение, резервные копии и удаление

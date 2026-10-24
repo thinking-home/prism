@@ -14,7 +14,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -59,7 +58,8 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
 
         // Гарантируем, что служба MQTT запущена как «переднего плана».
-        ContextCompat.startForegroundService(this, Intent(this, MqttService::class.java))
+        isVisible = true
+        MqttService.startIfEnabled(this, MqttService.ACTION_VISIBLE)
 
         val root = FrameLayout(this)
 
@@ -151,8 +151,13 @@ class MainActivity : AppCompatActivity() {
         // Подключаемся к сервису с медиа-сессией.
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
+        controllerFuture = future
         future.addListener({
-            val c = future.get()
+            if (controllerFuture !== future) return@addListener
+            val c = try { future.get() } catch (_: Exception) {
+                errorText?.visibility = View.VISIBLE
+                return@addListener
+            }
             controller = c
             view.player = c
             // Реагируем на открытие/закрытие файла, чтобы переключать меню/видео.
@@ -172,7 +177,6 @@ class MainActivity : AppCompatActivity() {
             })
             updateUi(c) // начальное состояние
         }, MoreExecutors.directExecutor())
-        controllerFuture = future
     }
 
     // Файл открыт → показываем видео; иначе — главный экран (логотип + шестерёнка + статус).
@@ -188,7 +192,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatus(connected: Boolean) {
-        statusText?.text = getString(if (connected) R.string.mqtt_connected else R.string.mqtt_disconnected)
+        statusText?.text = getString(when {
+            !Settings.remoteEnabled(this) -> R.string.mqtt_disabled
+            connected -> R.string.mqtt_connected
+            else -> R.string.mqtt_disconnected
+        })
     }
 
     // Back при открытом фильме — закрыть по ДВОЙНОМУ нажатию (чтобы случайно не сбросить
@@ -207,11 +215,17 @@ class MainActivity : AppCompatActivity() {
 
     // onStop — экран скрыт: пауза и отключение от сервиса (сервис/служба живут дальше).
     override fun onStop() {
+        isVisible = false
         super.onStop()
         controller?.pause() // пауза при сворачивании плеера в фон
         MqttStatus.listener = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         controller = null
+    }
+
+    companion object {
+        var isVisible = false
+            private set
     }
 }

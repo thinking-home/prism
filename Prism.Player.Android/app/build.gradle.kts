@@ -22,7 +22,7 @@ android {
         applicationId = "ru.thinking_home.prism.player" // идентификатор карточки Google Play
         minSdk = 24                        // минимальная версия Android (7.0); покрывает Android 11 бокса
         targetSdk = 36                     // под какую версию тестировали
-        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 6
+        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 7
         versionName = providers.gradleProperty("releaseVersion").orNull ?: "0.4.1"
     }
 
@@ -64,6 +64,7 @@ android {
 
 // Подключаемые библиотеки.
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     // ExoPlayer (Media3) — проигрыватель видео.
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     // Поддержка HLS (формат, которым Prism отдаёт видео).

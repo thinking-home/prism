@@ -8,7 +8,7 @@ What the app does
 The app plays media from URLs supplied by your controller through an MQTT broker that you configure. It does not require a developer-hosted account. The app has no advertising, analytics or automatic crash-reporting service integrated by the developer.
 
 Data stored on your device
-The app stores your MQTT broker address, optional username and password, player display name and a randomly generated player identifier in its private Android app storage. The identifier identifies this installation; it is not an advertising ID or hardware identifier. Credentials are not additionally encrypted by the app.
+The app stores whether you enabled remote control, your MQTT broker address, optional username and password, player display name and a randomly generated player identifier in its private Android app storage. The identifier identifies this installation; it is not an advertising ID or hardware identifier. Credentials are not additionally encrypted by the app.
 To resume playback, it stores media URLs, playback positions and save timestamps for up to 100 items. Older entries are removed as new ones are added. An entry is removed when a saved position is near the beginning or at least 95% through the media.
 
 Network transfers and recipients
@@ -17,7 +17,7 @@ Media servers receive requests for media URLs, playlists, segments and related r
 Android media sessions expose playback information and controls to the system and connected media controllers. The app does not sell data or send it to advertising networks.
 
 Permissions and connection security
-Internet access supports MQTT and media streaming. Foreground services, notifications and startup after device boot support playback and remote commands. Permission to display over other apps supports bringing the player to the screen for an incoming command; it is not used to capture other apps or screen content.
+Internet access supports MQTT and media streaming. Remote control is off until you enable it in Settings. While enabled, a foreground service and startup after device boot keep the player available for commands. You can turn it off in Settings or the notification. The network-state permission is required by Android for this network connected-device service; the app does not change network settings. A separate media service supports playback. Permission to display over other apps supports bringing the player to the screen for an incoming command; it is not used to capture other apps or screen content.
 Encryption depends on your configuration. Plain HTTP and tcp:// MQTT connections are supported and are not encrypted. Use HTTPS and TLS-enabled MQTT (ssl://) on servers you trust; do not send sensitive credentials over unencrypted connections.
 
 Retention, backups and deletion

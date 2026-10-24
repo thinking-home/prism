@@ -3,12 +3,17 @@ package org.prism.player
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
 import android.text.InputType
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Switch
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 
 // Экран редактирования настроек. Поля с подписями + кнопка «Сохранить».
@@ -53,20 +58,41 @@ class SettingsActivity : Activity() {
         container.addView(TextView(this).apply { text = Settings.playerId(this@SettingsActivity) })
 
         val save = Button(this).apply { text = getString(R.string.settings_save) }
+        val remote = Switch(this).apply {
+            text = getString(R.string.remote_enabled)
+            isChecked = Settings.remoteEnabled(this@SettingsActivity)
+        }
+        container.addView(remote)
+        container.addView(TextView(this).apply { text = getString(R.string.remote_explanation) })
         container.addView(save)
 
         save.setOnClickListener {
+            val broker = brokerField.text.toString().trim()
+            if (remote.isChecked && !MqttEndpoint.isValid(broker)) {
+                brokerField.error = getString(R.string.invalid_broker)
+                brokerField.requestFocus()
+                return@setOnClickListener
+            }
             Settings.save(
                 this,
-                brokerField.text.toString().trim(),
+                broker,
                 userField.text.toString().trim(),
                 passField.text.toString(),
                 nameField.text.toString().trim(),
             )
-            // Перезапускаем службу MQTT — она перечитает брокер/id и переподключится.
-            stopService(Intent(this, MqttService::class.java))
-            ContextCompat.startForegroundService(this, Intent(this, MqttService::class.java))
-            finish()
+            Settings.setRemoteEnabled(this, remote.isChecked)
+            if (remote.isChecked) {
+                if (!MqttService.startIfEnabled(this, MqttService.ACTION_RELOAD)) {
+                    Toast.makeText(this, R.string.remote_start_failed, Toast.LENGTH_LONG).show()
+                }
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                } else finish()
+            } else {
+                stopService(Intent(this, MqttService::class.java))
+                finish()
+            }
         }
 
         container.addView(Button(this).apply {
@@ -77,5 +103,15 @@ class SettingsActivity : Activity() {
         })
 
         setContentView(ScrollView(this).apply { addView(container) })
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1) {
+            if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, R.string.notifications_denied, Toast.LENGTH_LONG).show()
+            }
+            finish()
+        }
     }
 }

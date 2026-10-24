@@ -16,6 +16,16 @@ object Settings {
     private const val KEY_MQTT_PASSWORD = "mqtt_password"
     private const val KEY_PLAYER_NAME = "player_name"
     private const val KEY_PLAYER_ID = "player_id"
+    private const val KEY_REMOTE_ENABLED = "remote_enabled"
+
+    fun remoteEnabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_REMOTE_ENABLED, false)
+
+    fun setRemoteEnabled(ctx: Context, enabled: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_REMOTE_ENABLED, enabled).apply()
+    }
+
+    fun canRunRemote(ctx: Context): Boolean =
+        remoteEnabled(ctx) && MqttEndpoint.isValid(brokerUrl(ctx))
 
     // Значения для эмулятора — подставляются только в отладочной сборке.
     private const val DEBUG_BROKER_URL = "tcp://10.0.2.2:1883"
