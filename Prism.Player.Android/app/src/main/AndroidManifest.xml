@@ -18,7 +18,7 @@
 
     <!-- Android TV: поддержка leanback и отсутствие требования тачскрина
          (иначе на ТВ приложение считается несовместимым). -->
-    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
@@ -31,6 +31,7 @@
         <!-- Единственный экран приложения. -->
         <activity
             android:name=".MainActivity"
+            android:screenOrientation="landscape"
             android:exported="true"
             android:launchMode="singleTask"><!-- один экземпляр: активация переиспользует его, не плодит новые -->
             <!-- Этот intent-filter делает экран точкой входа и кладёт иконку в меню приложений. -->
@@ -45,10 +46,12 @@
         <!-- Экран настроек (адреса, id, имя). Открывается кнопкой с главного экрана. -->
         <activity
             android:name=".SettingsActivity"
+            android:screenOrientation="landscape"
             android:exported="false" />
 
         <activity
             android:name=".AboutActivity"
+            android:screenOrientation="landscape"
             android:exported="false" />
 
         <!-- Фоновый сервис с медиа-сессией. intent-filter делает его доступным

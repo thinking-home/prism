@@ -73,6 +73,11 @@ def icon(app, size):
 def banner(app):
     canvas = Image.new("RGBA", (640, 360), PALETTES[app]["background"])
     draw = ImageDraw.Draw(canvas)
+    if app == "Player":
+        paste_logo(canvas, app, 44, 70, 220)
+        draw.text((208, 114), "ThinkingHome", fill="#F7F8FC", font=font(48), anchor="lt")
+        draw.text((208, 184), "Prism Player", fill="#F7F8FC", font=font(56, True), anchor="lt")
+        return canvas
     role_font = font(80, True)
     bounds = draw.textbbox((0, 0), app, font=role_font, anchor="lt")
     text_width, text_height = bounds[2] - bounds[0], bounds[3] - bounds[1]
@@ -113,7 +118,7 @@ for app in PALETTES:
         icon_dir, banner_dir = res / f"mipmap-{density}", res / f"drawable-{density}"
         icon_dir.mkdir(parents=True, exist_ok=True)
         banner_dir.mkdir(parents=True, exist_ok=True)
-        icon(app, round(48 * factor)).save(icon_dir / "ic_launcher.png")
+        icon(app, round((80 if app == "Player" else 48) * factor)).save(icon_dir / "ic_launcher.png")
         master.resize((round(160 * factor), round(90 * factor)), Image.Resampling.LANCZOS).save(banner_dir / "banner.png")
     write(res / "drawable/ic_launcher_foreground.xml", vector(app))
     write(res / "drawable/ic_launcher_monochrome.xml", vector(app, monochrome=True))
@@ -163,7 +168,7 @@ for app in PALETTES:
     ET.parse(res / "values/branding.xml")
     for density, factor in DENSITIES.items():
         with Image.open(res / f"mipmap-{density}/ic_launcher.png") as image:
-            assert image.size == (round(48 * factor),) * 2
+            assert image.size == (round((80 if app == "Player" else 48) * factor),) * 2
         with Image.open(res / f"drawable-{density}/banner.png") as image:
             assert image.size == (round(160 * factor), round(90 * factor))
 print("Generated and validated icons, banners, adaptive/monochrome resources and player idle image.")
